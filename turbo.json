@@ -3,11 +3,12 @@
 	"ui": "tui",
 	"tasks": {
 		"dev": {
+			"with": ["//#web:dev"],
 			"cache": false,
 			"interactive": true,
 			"persistent": true
 		},
-		"//#dev": {
+		"//#web:dev": {
 			"cache": false,
 			"interactive": true,
 			"persistent": true

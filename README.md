@@ -42,7 +42,7 @@ cp .env.example .env
 Start both the Flue Worker and SvelteKit in Turborepo's interactive TUI:
 
 ```sh
-pnpm dev:all
+pnpm dev
 ```
 
 Use the arrow keys or `j`/`k` to switch tasks, `i` to interact with the selected process, `Ctrl+z` to stop interacting, and `m` to show all TUI keybindings.

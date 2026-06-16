@@ -23,7 +23,7 @@ const runTest = defineTool({
 });
 
 export default createAgent(() => ({
-	model: 'cloudflare/@cf/moonshotai/kimi-k2.6',
+	model: 'openrouter/openai/gpt-5.4-mini',
 	description: 'A small general-purpose assistant with one visible test tool.',
 	instructions: `You are a concise, thoughtful general assistant.
 

@@ -9,9 +9,6 @@
 			"new_sqlite_classes": ["FlueRegistry", "FlueAssistantAgent"]
 		}
 	],
-	"ai": {
-		"binding": "AI"
-	},
 	"observability": {
 		"enabled": true
 	}
