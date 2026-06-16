@@ -1,0 +1,16 @@
+packages:
+  - agent
+
+allowBuilds:
+  '@google/genai': true
+  '@mongodb-js/zstd': true
+  core-js-pure: true
+  esbuild: true
+  node-liblzma: false
+  protobufjs: true
+  sharp: true
+  workerd: true
+minimumReleaseAgeExclude:
+  - '@flue/sdk@1.0.0-beta.1'
+  - '@flue/runtime@1.0.0-beta.1'
+  - '@flue/cli@1.0.0-beta.1'
