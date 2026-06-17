@@ -7,6 +7,15 @@
 		{
 			"tag": "v1",
 			"new_sqlite_classes": ["FlueRegistry", "FlueAssistantAgent"]
+		},
+		{
+			"tag": "v2",
+			"renamed_classes": [
+				{
+					"from": "FlueAssistantAgent",
+					"to": "FlueDemoAgentAgent"
+				}
+			]
 		}
 	],
 	"observability": {

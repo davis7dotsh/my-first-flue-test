@@ -1,0 +1,31 @@
+2026-06-16T15:56:09.036-0700 [DEBUG] turborepo_lib::commands::run: Verbose tracing redirected to /Users/davis/Developer/sandbox/flue-sveltekit-demo/.turbo/debug-logs/turbo-20260616-155609.log
+2026-06-16T15:56:09.036-0700 [DEBUG] turborepo_process: spawning children with pty: false
+2026-06-16T15:56:09.036-0700 [DEBUG] turborepo_repository::discovery: discovering packages using caching strategy
+2026-06-16T15:56:09.036-0700 [DEBUG] turborepo_repository::discovery: discovering packages using primary strategy
+2026-06-16T15:56:09.036-0700 [DEBUG] turborepo_repository::discovery: discovering packages using local strategy
+2026-06-16T15:56:09.037-0700 [DEBUG] turborepo_repository::discovery: discovering packages using caching strategy
+2026-06-16T15:56:09.041-0700 [DEBUG] turborepo_repository::discovery: discovering packages using caching strategy
+2026-06-16T15:56:09.042-0700 [DEBUG] turborepo_repository::discovery: discovering packages using caching strategy
+2026-06-16T15:56:09.042-0700 [DEBUG] turborepo_lib::microfrontends: MicrofrontendsConfigs::from_disk - loading configurations
+2026-06-16T15:56:09.042-0700 [DEBUG] turborepo_lib::microfrontends: from_disk - any package has @vercel/microfrontends dep: false
+2026-06-16T15:56:09.042-0700 [DEBUG] turborepo_lib::microfrontends: from_disk - package: @flue-sveltekit-demo/agent, has @vercel/microfrontends dep: false
+2026-06-16T15:56:09.042-0700 [DEBUG] turborepo_lib::microfrontends: from_disk - package: //, has @vercel/microfrontends dep: false
+2026-06-16T15:56:09.042-0700 [DEBUG] turborepo_lib::microfrontends: from_disk - loaded 2 package configs
+2026-06-16T15:56:09.042-0700 [DEBUG] turborepo_lib::microfrontends: from_configs - processing configurations
+2026-06-16T15:56:09.042-0700 [DEBUG] turborepo_lib::microfrontends: from_configs - result: 0 configs, mfe_package=None, has_mfe_dependency=false
+2026-06-16T15:56:09.042-0700 [DEBUG] turborepo_lib::microfrontends: from_configs - no configs found, returning None
+2026-06-16T15:56:09.042-0700 [DEBUG] turborepo_cache::multiplexer: CacheMultiplexer::new creating FSCache with cache_dir=.turbo/cache, repo_root=/Users/davis/Developer/sandbox/flue-sveltekit-demo
+2026-06-16T15:56:09.042-0700 [DEBUG] turborepo_cache::fs: FSCache::new called with cache_dir=.turbo/cache, repo_root=/Users/davis/Developer/sandbox/flue-sveltekit-demo
+2026-06-16T15:56:09.042-0700 [DEBUG] turborepo_cache::fs: FSCache resolved cache_directory=/Users/davis/Developer/sandbox/flue-sveltekit-demo/.turbo/cache
+2026-06-16T15:56:09.042-0700 [DEBUG] turborepo_turbo_json::loader: path: /Users/davis/Developer/sandbox/flue-sveltekit-demo/agent, turbo_json: Ok(None), turbo_jsonc: Ok(None)
+2026-06-16T15:56:09.043-0700 [DEBUG] turborepo_scm::repo_index: built tracked repo git index (gix-index): clean_count=22, status_count=7
+2026-06-16T15:56:09.043-0700 [DEBUG] turborepo_scm: tracked repo git index built eagerly
+2026-06-16T15:56:09.043-0700 [DEBUG] turborepo_turbo_json::loader: path: /Users/davis/Developer/sandbox/flue-sveltekit-demo/agent, turbo_json: Ok(None), turbo_jsonc: Ok(None)
+2026-06-16T15:56:09.043-0700 [DEBUG] turborepo_turbo_json::loader: path: /Users/davis/Developer/sandbox/flue-sveltekit-demo/agent, turbo_json: Ok(None), turbo_jsonc: Ok(None)
+2026-06-16T15:56:09.043-0700 [DEBUG] turborepo_lib::run::task_access: TASK ACCESS TRACE: unable to restore config from cache
+2026-06-16T15:56:09.043-0700 [DEBUG] log: glob converted to regex: Glob { glob: "**/.env.*", re: "(?-u)^(?:/?|.*/)\\.env\\.[^/]*$", opts: GlobOptions { case_insensitive: false, literal_separator: true, backslash_escape: true, empty_alternates: false }, tokens: Tokens([RecursivePrefix, Literal('.'), Literal('e'), Literal('n'), Literal('v'), Literal('.'), ZeroOrMore]) }
+2026-06-16T15:56:09.043-0700 [DEBUG] log: glob converted to regex: Glob { glob: "**/vite.config.js.timestamp-*", re: "(?-u)^(?:/?|.*/)vite\\.config\\.js\\.timestamp\\-[^/]*$", opts: GlobOptions { case_insensitive: false, literal_separator: true, backslash_escape: true, empty_alternates: false }, tokens: Tokens([RecursivePrefix, Literal('v'), Literal('i'), Literal('t'), Literal('e'), Literal('.'), Literal('c'), Literal('o'), Literal('n'), Literal('f'), Literal('i'), Literal('g'), Literal('.'), Literal('j'), Literal('s'), Literal('.'), Literal('t'), Literal('i'), Literal('m'), Literal('e'), Literal('s'), Literal('t'), Literal('a'), Literal('m'), Literal('p'), Literal('-'), ZeroOrMore]) }
+2026-06-16T15:56:09.043-0700 [DEBUG] log: glob converted to regex: Glob { glob: "**/vite.config.ts.timestamp-*", re: "(?-u)^(?:/?|.*/)vite\\.config\\.ts\\.timestamp\\-[^/]*$", opts: GlobOptions { case_insensitive: false, literal_separator: true, backslash_escape: true, empty_alternates: false }, tokens: Tokens([RecursivePrefix, Literal('v'), Literal('i'), Literal('t'), Literal('e'), Literal('.'), Literal('c'), Literal('o'), Literal('n'), Literal('f'), Literal('i'), Literal('g'), Literal('.'), Literal('t'), Literal('s'), Literal('.'), Literal('t'), Literal('i'), Literal('m'), Literal('e'), Literal('s'), Literal('t'), Literal('a'), Literal('m'), Literal('p'), Literal('-'), ZeroOrMore]) }
+2026-06-16T15:56:09.043-0700 [DEBUG] log: built glob set; 3 literals, 16 basenames, 0 extensions, 0 prefixes, 1 suffixes, 0 required extensions, 3 regexes
+2026-06-16T15:56:09.043-0700 [DEBUG] log: built glob set; 1 literals, 0 basenames, 0 extensions, 0 prefixes, 1 suffixes, 0 required extensions, 0 regexes
+2026-06-16T15:56:09.046-0700 [DEBUG] turborepo_scm::repo_index: populated repo git index with untracked files: added_count=2, status_count=9

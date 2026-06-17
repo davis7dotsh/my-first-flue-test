@@ -5,6 +5,7 @@ A deliberately small stateful agent stack on Cloudflare:
 - SvelteKit renders the chat UI as a Cloudflare Worker.
 - A second Worker runs a Flue agent backed by Durable Objects.
 - A Cloudflare service binding connects the SvelteKit Worker to the agent Worker.
+- D1 stores the browser-owned thread index used by the sidebar.
 - Workers AI provides the model, so there is no external model API key.
 - The agent has one typed `run_test` tool and no Git checkout, container, or external sandbox.
 - The UI displays Flue's Durable Streams events while the response runs.
@@ -14,15 +15,18 @@ A deliberately small stateful agent stack on Cloudflare:
 ```text
 .
 ├── src/
-│   ├── routes/+page.svelte                # Chat UI and event trace
+│   ├── lib/components/ChatThread.svelte   # Durable replay and live chat UI
+│   ├── routes/chat/[id]/+page.svelte      # Thread URL
+│   ├── routes/api/threads/+server.ts      # D1 thread index API
 │   └── routes/api/flue/[...path]/+server.ts
-│                                            # Same-origin Flue proxy
+│                                           # Authorized same-origin Flue proxy
 ├── agent/
-│   ├── src/agents/assistant.ts             # Agent and run_test tool
+│   ├── src/agents/demo-agent.ts            # Agent and run_test tool
 │   ├── flue.config.ts
 │   └── wrangler.jsonc                      # Flue Worker and DO migrations
+├── migrations/0001_create_threads.sql      # D1 thread metadata
 ├── turbo.json                              # Interactive two-process dev runner
-└── wrangler.jsonc                          # SvelteKit Worker and service binding
+└── wrangler.jsonc                          # Web Worker, service, and D1 bindings
 ```
 
 ## Run locally
@@ -39,6 +43,12 @@ Create the local proxy configuration:
 cp .env.example .env
 ```
 
+Apply the D1 schema to local development storage:
+
+```sh
+pnpm db:migrate:local
+```
+
 Start both the Flue Worker and SvelteKit in Turborepo's interactive TUI:
 
 ```sh
@@ -47,13 +57,13 @@ pnpm dev
 
 Use the arrow keys or `j`/`k` to switch tasks, `i` to interact with the selected process, `Ctrl+z` to stop interacting, and `m` to show all TUI keybindings.
 
-Open the SvelteKit URL and choose **Test the tool**. Flue runs locally on port `3583`; the SvelteKit endpoint proxies `/api/flue/*` to it.
+Open the SvelteKit URL and create a thread. Flue runs locally on port `3583`; the SvelteKit endpoint proxies authorized `/api/flue/*` requests to it.
 
 ## How the durable thread works
 
-The browser creates an agent instance ID and keeps it in `localStorage`. Flue maps that ID to one Durable Object, whose SQLite storage retains conversation state. **New thread** creates a different ID and therefore a fresh agent instance.
+The web Worker creates each thread in D1 with an owner cookie, title, timestamps, and the `demo-agent` agent name. The thread ID is also the Flue instance ID, so each D1 row points to one Durable Object-backed conversation.
 
-The browser submits with `client.agents.send(...)`, then reads from the receipt's exact offset with `client.agents.stream(...)`. The right-hand panel exposes the important events: durable admission, model turns, tool execution, token streaming, settlement, and idle.
+Flue remains the source of truth for conversation content. Opening `/chat/:id` replays the agent event stream from offset `-1` and keeps the stream live. A refresh during generation therefore rebuilds completed history and continues receiving the in-flight response. New threads begin reading from the admission offset returned by `client.agents.send(...)`.
 
 ## Check the project
 
@@ -73,6 +83,12 @@ pnpm exec wrangler login
 pnpm agent:deploy
 ```
 
+Apply the production D1 migration:
+
+```sh
+pnpm db:migrate:remote
+```
+
 Deploy the SvelteKit Worker after the `flue-sveltekit-agent` service exists:
 
 ```sh
@@ -83,4 +99,4 @@ The production SvelteKit Worker uses its `FLUE_AGENT` service binding. `FLUE_AGE
 
 ## Production note
 
-The demo intentionally leaves the Flue route unauthenticated. Add authentication and per-user agent IDs before exposing it as a real product.
+The demo scopes threads with an HTTP-only browser cookie and verifies ownership before forwarding to Flue. Replace that anonymous owner with real authentication before exposing user data in production.

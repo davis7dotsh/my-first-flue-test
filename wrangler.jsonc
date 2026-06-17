@@ -17,5 +17,13 @@
 	],
 	"observability": {
 		"enabled": true
-	}
+	},
+	"d1_databases": [
+		{
+			"binding": "THREADS_DB",
+			"database_name": "flue-sveltekit-demo-threads",
+			"database_id": "9edccc92-e765-4277-b286-e9225add7bde",
+			"migrations_dir": "migrations"
+		}
+	]
 }

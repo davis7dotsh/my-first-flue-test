@@ -1,10 +1,15 @@
 <script lang="ts">
 	import ChatThread from '$lib/components/ChatThread.svelte';
+	import type { PageProps } from './$types';
+
+	let { data }: PageProps = $props();
 </script>
 
 <svelte:head>
-	<title>Flue Agent</title>
+	<title>{data.thread.title} · Flue</title>
 	<meta name="description" content="A minimal durable Flue agent chat." />
 </svelte:head>
 
-<ChatThread />
+{#key data.thread.id}
+	<ChatThread thread={data.thread} />
+{/key}
