@@ -1,1 +1,4 @@
-OPENROUTER_API_KEY=your-openrouter-api-key
+# Optional local override. Production defaults to the value in agent/wrangler.jsonc.
+AI_GATEWAY_ID=default
+
+# Workers AI uses the configured AI binding and does not require a model API key.

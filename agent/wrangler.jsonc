@@ -3,6 +3,14 @@
 	"name": "flue-sveltekit-agent",
 	"compatibility_date": "2026-06-16",
 	"compatibility_flags": ["nodejs_compat"],
+	"workers_dev": false,
+	"preview_urls": false,
+	"ai": {
+		"binding": "AI"
+	},
+	"vars": {
+		"AI_GATEWAY_ID": "default"
+	},
 	"migrations": [
 		{
 			"tag": "v1",
@@ -14,6 +22,15 @@
 				{
 					"from": "FlueAssistantAgent",
 					"to": "FlueDemoAgentAgent"
+				}
+			]
+		},
+		{
+			"tag": "v3",
+			"renamed_classes": [
+				{
+					"from": "FlueDemoAgentAgent",
+					"to": "FlueResearchAgentAgent"
 				}
 			]
 		}

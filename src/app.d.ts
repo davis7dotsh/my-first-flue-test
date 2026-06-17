@@ -1,6 +1,10 @@
+import type { AppUser } from '$lib/server/users';
+
 declare global {
 	namespace App {
-		// Add application-specific SvelteKit types here.
+		interface Locals {
+			user: AppUser;
+		}
 	}
 }
 

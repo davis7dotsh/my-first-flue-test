@@ -1,25 +1,8 @@
 import { env } from '$env/dynamic/private';
-import {
-	getThread,
-	threadOwner,
-	threadsDb,
-	touchThread,
-	workerBindings
-} from '$lib/server/threads';
+import { parseFlueAgentPath } from '$lib/server/flue-path';
+import { getThread, threadsDb, touchThread, workerBindings } from '$lib/server/threads';
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-
-function agentTarget(path: string) {
-	const [resource, encodedAgentName, encodedThreadId, ...rest] = path.split('/');
-	if (resource !== 'agents' || !encodedAgentName || !encodedThreadId || rest.length > 0) {
-		return null;
-	}
-
-	return {
-		agentName: decodeURIComponent(encodedAgentName),
-		threadId: decodeURIComponent(encodedThreadId)
-	};
-}
 
 async function submittedMessage(request: Request) {
 	if (request.method !== 'POST') {
@@ -63,19 +46,18 @@ function localAgentUnavailableResponse() {
 	);
 }
 
-const proxy: RequestHandler = async ({ cookies, params, platform, request, url }) => {
+const proxy: RequestHandler = async ({ locals, params, platform, request, url }) => {
 	if (!params.path) {
 		error(404, 'Missing Flue route.');
 	}
 
-	const targetAgent = agentTarget(params.path);
+	const targetAgent = parseFlueAgentPath(params.path);
 	if (!targetAgent) {
 		error(404, 'Unknown Flue route.');
 	}
 
-	const ownerId = threadOwner(cookies, url);
 	const db = threadsDb(platform);
-	const thread = await getThread(db, ownerId, targetAgent.threadId);
+	const thread = await getThread(db, locals.user.id, targetAgent.threadId);
 	if (!thread || thread.agentName !== targetAgent.agentName) {
 		error(404, 'Thread not found.');
 	}
@@ -103,7 +85,7 @@ const proxy: RequestHandler = async ({ cookies, params, platform, request, url }
 		}
 
 		if (response.ok && message) {
-			await touchThread(db, ownerId, thread.id, message);
+			await touchThread(db, locals.user.id, thread.id, message);
 		}
 
 		return response;

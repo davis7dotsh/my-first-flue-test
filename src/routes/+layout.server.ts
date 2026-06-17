@@ -1,9 +1,8 @@
-import { listThreads, threadOwner, threadsDb } from '$lib/server/threads';
+import { listThreads, threadsDb } from '$lib/server/threads';
 import type { LayoutServerLoad } from './$types';
 
-export const load: LayoutServerLoad = async ({ cookies, platform, url }) => {
-	const ownerId = threadOwner(cookies, url);
+export const load: LayoutServerLoad = async ({ locals, platform }) => {
 	return {
-		threads: await listThreads(threadsDb(platform), ownerId)
+		threads: await listThreads(threadsDb(platform), locals.user.id)
 	};
 };

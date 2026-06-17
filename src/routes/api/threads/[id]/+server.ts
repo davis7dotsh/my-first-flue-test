@@ -1,14 +1,13 @@
-import { archiveThread, threadOwner, threadsDb } from '$lib/server/threads';
+import { threadsDb, tombstoneThread } from '$lib/server/threads';
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
-export const DELETE: RequestHandler = async ({ cookies, params, platform, url }) => {
-	const ownerId = threadOwner(cookies, url);
-	const archived = await archiveThread(threadsDb(platform), ownerId, params.id);
+export const DELETE: RequestHandler = async ({ locals, params, platform }) => {
+	const tombstoned = await tombstoneThread(threadsDb(platform), locals.user.id, params.id);
 
-	if (!archived) {
+	if (!tombstoned) {
 		error(404, 'Thread not found.');
 	}
 
-	return new Response(null, { status: 204 });
+	return new Response(null, { status: 202 });
 };

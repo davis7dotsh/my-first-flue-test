@@ -8,6 +8,10 @@
 		type FlueEventStream,
 		type LlmMessage
 	} from '@flue/sdk';
+	import SvelteMarkdown, {
+		buildUnsupportedHTML,
+		defaultRenderers
+	} from '@humanspeak/svelte-markdown';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { appendThreadHistoryEvent, eventKey, loadThreadHistory } from '$lib/chat-history';
@@ -22,6 +26,7 @@
 		kind: 'message';
 		role: 'assistant' | 'user';
 		text: string;
+		reasoning?: string;
 	};
 
 	type ToolRun = {
@@ -53,7 +58,7 @@
 		id: 'welcome',
 		kind: 'message',
 		role: 'assistant',
-		text: 'Hi. Ask me anything, or ask me to run the test tool.'
+		text: 'Hi. Give me a research question or a public repository to investigate.'
 	};
 
 	let conversation = $state<ConversationItem[]>([welcomeMessage]);
@@ -73,6 +78,10 @@
 	let assistantMessages = new SvelteMap<string, string>();
 
 	const canSend = $derived(Boolean(prompt.trim() && !busy && !hydrating));
+	const markdownRenderers = {
+		...defaultRenderers,
+		html: buildUnsupportedHTML()
+	};
 
 	onMount(() => {
 		const flueClient = createFlueClient({ baseUrl: '/api/flue' });
@@ -241,15 +250,27 @@
 		return message.content.map((block) => (block.type === 'text' ? block.text : '')).join('');
 	}
 
+	function messageReasoning(message: LlmMessage) {
+		if (message.role !== 'assistant') {
+			return '';
+		}
+
+		return message.content
+			.filter((block) => block.type === 'thinking')
+			.map((block) => block.thinking)
+			.filter(Boolean)
+			.join('\n\n');
+	}
+
+	function reasoningPreview(reasoning: string) {
+		return reasoning.split(/\r?\n/, 1)[0]?.trim() || 'Reasoning';
+	}
+
 	function assistantKey(event: AttachedAgentEvent) {
 		return `${event.submissionId ?? 'session'}:${event.turnId ?? 'turn'}`;
 	}
 
-	function setAssistantText(event: AttachedAgentEvent, text: string, append: boolean) {
-		if (!text) {
-			return;
-		}
-
+	function ensureAssistantMessage(event: AttachedAgentEvent) {
 		const key = assistantKey(event);
 		let messageId = assistantMessages.get(key);
 		if (!messageId) {
@@ -266,11 +287,30 @@
 			];
 		}
 
-		const message = conversation.find(
+		return conversation.find(
 			(item): item is ChatMessage => item.kind === 'message' && item.id === messageId
 		);
+	}
+
+	function setAssistantText(event: AttachedAgentEvent, text: string, append: boolean) {
+		if (!text) {
+			return;
+		}
+
+		const message = ensureAssistantMessage(event);
 		if (message) {
 			message.text = append ? message.text + text : text;
+		}
+	}
+
+	function setAssistantReasoning(event: AttachedAgentEvent, reasoning: string, append: boolean) {
+		if (!reasoning) {
+			return;
+		}
+
+		const message = ensureAssistantMessage(event);
+		if (message) {
+			message.reasoning = append ? (message.reasoning ?? '') + reasoning : reasoning;
 		}
 	}
 
@@ -293,6 +333,15 @@
 			case 'text_delta':
 				setAssistantText(event, event.text, true);
 				break;
+			case 'thinking_start':
+				ensureAssistantMessage(event);
+				break;
+			case 'thinking_delta':
+				setAssistantReasoning(event, event.delta, true);
+				break;
+			case 'thinking_end':
+				setAssistantReasoning(event, event.content, false);
+				break;
 			case 'message_end':
 				if (event.message.role === 'user') {
 					conversation = [
@@ -305,6 +354,10 @@
 						}
 					];
 				} else if (event.message.role === 'assistant') {
+					const reasoning = messageReasoning(event.message);
+					if (reasoning) {
+						setAssistantReasoning(event, reasoning, false);
+					}
 					setAssistantText(event, messageText(event.message), false);
 				}
 				break;
@@ -495,6 +548,23 @@
 						{#if item.kind === 'message'}
 							<article class={['message', item.role === 'user' && 'user']}>
 								<span>{item.role === 'assistant' ? 'Agent' : 'You'}</span>
+								{#if item.role === 'assistant' && item.reasoning}
+									<details class="reasoning">
+										<summary>
+											<strong>Reasoning</strong>
+											<span class="reasoning-preview">
+												<SvelteMarkdown
+													source={reasoningPreview(item.reasoning)}
+													renderers={markdownRenderers}
+													isInline
+												/>
+											</span>
+										</summary>
+										<div class="reasoning-content">
+											<SvelteMarkdown source={item.reasoning} renderers={markdownRenderers} />
+										</div>
+									</details>
+								{/if}
 								<p>{item.text}</p>
 							</article>
 						{:else}
@@ -642,7 +712,7 @@
 	}
 
 	.conversation-inner {
-		width: min(720px, 100%);
+		width: min(1040px, 100%);
 		margin: 0 auto;
 	}
 
@@ -691,6 +761,98 @@
 		font-size: 1rem;
 		line-height: 1.7;
 		white-space: pre-wrap;
+	}
+
+	.reasoning {
+		margin-bottom: 14px;
+		color: var(--text-muted);
+	}
+
+	.reasoning summary {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) auto;
+		gap: 9px;
+		align-items: center;
+		padding: 0;
+		cursor: pointer;
+		list-style: none;
+		font-size: 0.72rem;
+	}
+
+	.reasoning summary::-webkit-details-marker {
+		display: none;
+	}
+
+	.reasoning summary::after {
+		content: '+';
+		color: var(--text-faint);
+		font-size: 0.9rem;
+	}
+
+	.reasoning[open] summary::after {
+		content: '−';
+	}
+
+	.reasoning-preview {
+		overflow: hidden;
+		color: var(--text-faint);
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.reasoning-content {
+		max-height: 320px;
+		overflow: auto;
+		padding-top: 12px;
+		color: var(--text-muted);
+		font-size: 0.82rem;
+		line-height: 1.65;
+	}
+
+	.reasoning-content :global(:first-child) {
+		margin-top: 0;
+	}
+
+	.reasoning-content :global(:last-child) {
+		margin-bottom: 0;
+	}
+
+	.reasoning-content :global(p),
+	.reasoning-content :global(ul),
+	.reasoning-content :global(ol),
+	.reasoning-content :global(pre),
+	.reasoning-content :global(blockquote) {
+		margin: 0 0 0.85em;
+	}
+
+	.reasoning-content :global(ul),
+	.reasoning-content :global(ol) {
+		padding-left: 1.4em;
+	}
+
+	.reasoning-content :global(h1),
+	.reasoning-content :global(h2),
+	.reasoning-content :global(h3),
+	.reasoning-content :global(h4) {
+		margin: 1em 0 0.45em;
+		color: var(--text-soft);
+		font-size: 1em;
+		line-height: 1.35;
+	}
+
+	.reasoning-content :global(code) {
+		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+		font-size: 0.92em;
+	}
+
+	.reasoning-content :global(a) {
+		color: var(--text-soft);
+		text-underline-offset: 2px;
+	}
+
+	.reasoning-content :global(blockquote) {
+		border-left: 2px solid var(--border-strong);
+		padding-left: 10px;
 	}
 
 	.message.user {
@@ -821,7 +983,7 @@
 
 	.composer {
 		display: grid;
-		width: min(720px, 100%);
+		width: min(1040px, 100%);
 		margin: 0 auto;
 		grid-template-columns: 1fr auto;
 		gap: 12px;
@@ -879,7 +1041,7 @@
 	}
 
 	.error-message {
-		width: min(720px, 100%);
+		width: min(1040px, 100%);
 		margin: 7px auto 0;
 		color: var(--danger-text);
 		font-size: 0.72rem;
