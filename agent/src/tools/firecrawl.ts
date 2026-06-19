@@ -267,13 +267,15 @@ export const createFirecrawlTools = ({
 	const getWebContent = defineTool({
 		name: 'get_web_content',
 		description:
-			'Retrieve readable markdown from one to ten selected public URLs with Firecrawl. Returns compact source URLs, titles, content, and optional summaries.',
+			'Retrieve readable markdown from one to ten selected public URLs with Firecrawl. Returns compact source URLs, titles, content, optional summaries, and sanitized per-URL failures.',
 		parameters: getWebContentParameters,
 		execute: async ({ urls: inputUrls, maxCharacters, includeSummary }, signal) => {
 			const overallDeadline = createProviderDeadline({ signal, timeoutMs });
 			const urls = [...new Set(inputUrls)];
 			const characterLimit = maxCharacters ?? DEFAULT_CONTENT_CHARACTERS;
 			const results: ReturnType<typeof readScrapeResult>[] = [];
+			const errors: { url: string; error: string }[] = [];
+			let firstError: ProviderHttpError | undefined;
 
 			try {
 				for (let index = 0; index < urls.length; index += MAX_CONCURRENT_SCRAPES) {
@@ -301,12 +303,16 @@ export const createFirecrawlTools = ({
 						})
 					);
 
-					for (const result of settled) {
+					for (const [resultIndex, result] of settled.entries()) {
 						if (result.status === 'rejected') {
 							const reason: unknown = result.reason;
-							throw reason instanceof ProviderHttpError
-								? reason
-								: new ProviderHttpError('Firecrawl', 'request_failed');
+							const providerError =
+								reason instanceof ProviderHttpError
+									? reason
+									: new ProviderHttpError('Firecrawl', 'request_failed');
+							firstError ??= providerError;
+							errors.push({ url: chunk[resultIndex], error: providerError.message });
+							continue;
 						}
 						results.push(result.value);
 					}
@@ -315,7 +321,17 @@ export const createFirecrawlTools = ({
 				overallDeadline.dispose();
 			}
 
-			return JSON.stringify({ urls, count: results.length, results });
+			if (!results.length && firstError) {
+				throw firstError;
+			}
+
+			return JSON.stringify({
+				urls,
+				count: results.length,
+				results,
+				errorCount: errors.length,
+				errors
+			});
 		}
 	});
 

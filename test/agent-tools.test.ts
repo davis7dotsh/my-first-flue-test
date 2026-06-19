@@ -273,6 +273,33 @@ describe('Firecrawl tools', () => {
 		);
 	});
 
+	it('returns successful scrapes alongside sanitized per-URL failures', async () => {
+		const secret = 'firecrawl-super-secret';
+		const fetcher: ProviderFetch = async (_input, init) => {
+			const body = getRequestBody(init);
+			return body.url === 'https://working.example'
+				? Response.json({
+						success: true,
+						data: { markdown: 'Useful content', metadata: { sourceURL: body.url } }
+					})
+				: new Response(`private failure containing ${secret}`, { status: 503 });
+		};
+		const { getWebContent } = createFirecrawlTools({ apiKey: secret, fetcher });
+
+		const result = parseJsonRecord(
+			await getWebContent.execute({
+				urls: ['https://working.example', 'https://failing.example']
+			})
+		);
+
+		expect(result.count).toBe(1);
+		expect(result.errorCount).toBe(1);
+		expect(result.errors).toEqual([
+			{ url: 'https://failing.example', error: 'Firecrawl is temporarily unavailable.' }
+		]);
+		expect(JSON.stringify(result)).not.toContain(secret);
+	});
+
 	it('enforces streaming response limits without Content-Length', async () => {
 		const response = new Response('x'.repeat(101));
 		await expect(readBoundedText(response, 100, 'Firecrawl')).rejects.toThrow(
@@ -341,7 +368,12 @@ describe('Firecrawl tools', () => {
 		await waitForMicrotasks(() => calls >= 3, 'The first Firecrawl scrape batch did not start.');
 		releaseFirstBatch();
 
-		await expect(pending).rejects.toThrow('Firecrawl request timed out.');
+		const result = parseJsonRecord(await pending);
+		expect(result.count).toBe(3);
+		expect(result.errorCount).toBe(1);
+		expect(result.errors).toEqual([
+			{ url: 'https://four.example', error: 'Firecrawl request timed out.' }
+		]);
 		expect(calls).toBe(4);
 	});
 
