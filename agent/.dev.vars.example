@@ -1,4 +1,4 @@
 # Optional local override. Production uses the dedicated gateway in agent/wrangler.jsonc.
 AI_GATEWAY_ID=flue-sveltekit-demo-dev
 
-# Cloudflare Unified Billing uses the AI binding and does not require a model API key.
+# Workers AI uses the AI binding and does not require a model API key.

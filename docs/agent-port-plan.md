@@ -152,14 +152,15 @@ The main agent should:
 
 Model strategy:
 
-- launch default for the main agent and specialist profiles:
-  `cloudflare/openai/gpt-5.5`;
+- current testing default for the main agent and specialist profiles:
+  `cloudflare/@cf/moonshotai/kimi-k2.6`;
 - use low reasoning effort for agent model calls;
 - use structured results for classifications, plans, and workflow handoffs;
 - route all model calls through a named AI Gateway.
 
-Benchmark GPT-5.5 against representative source-agent tasks before production
-launch and change the default only from measured results. Do not restore
+Use the Workers AI daily free allocation during development. Benchmark Kimi
+K2.6 and GPT-5.5 against representative source-agent tasks before production
+launch, and switch to a paid model only from measured results. Do not restore
 OpenRouter as an unmeasured fallback.
 
 ### Profiles

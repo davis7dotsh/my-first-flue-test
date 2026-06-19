@@ -542,6 +542,9 @@
 				if (event.outcome === 'failed') {
 					errorMessage = event.error ?? 'The submission failed.';
 					failedPrompt = submissionPrompts.get(event.submissionId) ?? mostRecentPrompt();
+				} else {
+					errorMessage = '';
+					failedPrompt = '';
 				}
 				addTrace(
 					'submission_settled',

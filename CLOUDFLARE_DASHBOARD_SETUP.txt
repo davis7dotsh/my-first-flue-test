@@ -48,9 +48,8 @@ Choose this value before starting:
 [ ] At least one Access identity provider or login method is configured for the
     people who should use the app.
 
-[ ] Workers, D1, Durable Objects, the Cloudflare AI binding, AI Gateway, and
-    Unified Billing are available for
-    the account. Accept any product setup or billing prompts shown by
+[ ] Workers, D1, Durable Objects, the Cloudflare AI binding, and AI Gateway are
+    available for the account. Accept any product setup prompts shown by
     Cloudflare.
 
 All resources in this checklist must be created in the same Cloudflare account.
@@ -100,9 +99,9 @@ Dashboard path:
 Use this dedicated gateway rather than default so its rate and spend policies
 cannot affect unrelated applications.
 
-[ ] Leave provider credentials empty. This application calls openai/gpt-5.5
-    through the AI binding and Cloudflare Unified Billing, so it does not
-    require an OpenAI or other external model API key.
+[ ] Leave provider credentials empty. This application calls
+    @cf/moonshotai/kimi-k2.6 through the Workers AI binding, so it does not
+    require an external model API key or Unified Billing balance.
 
 [ ] Do not enable content logging unless an intentional retention and access
     policy has been approved. The agent also sends collectLog=false.
@@ -113,7 +112,8 @@ cannot affect unrelated applications.
     is intentionally small because this repository is a test project.
 
 No model is selected in the dashboard. The agent profiles select
-openai/gpt-5.5 with low reasoning in source code.
+@cf/moonshotai/kimi-k2.6 with low reasoning in source code. Testing usage is
+covered by Workers AI's daily free allocation until that allowance is exhausted.
 
 
 4. DEPLOY AND VERIFY THE PRIVATE AGENT WORKER
@@ -344,7 +344,7 @@ AI Gateway
 [ ] Gateway ID flue-sveltekit-demo exists
 [ ] Gateway rate limit is 60 requests per minute using a sliding window
 [ ] Global spend limit is $5 per rolling day with the Block action
-[ ] openai/gpt-5.5 requests appear in gateway analytics after a test conversation
+[ ] @cf/moonshotai/kimi-k2.6 requests appear in gateway analytics after a test conversation
 [ ] Content logging remains disabled unless explicitly approved
 
 
@@ -373,7 +373,7 @@ AI Gateway
    binding without binding or authorization errors.
 
 9. In the agent Worker logs and AI Gateway analytics, confirm an
-   openai/gpt-5.5 request completes with low reasoning.
+   @cf/moonshotai/kimi-k2.6 request completes with low reasoning.
 
 10. Confirm the following alternate URLs are unavailable:
       flue-sveltekit-agent.<account-subdomain>.workers.dev
@@ -403,7 +403,8 @@ D1 error about a missing table or column
 
 Workers AI or gateway error
   Verify the AI binding, AI_GATEWAY_ID=flue-sveltekit-demo, gateway existence,
-  Unified Billing access, spend-limit state, and openai/gpt-5.5 availability.
+  remaining Workers AI daily allocation, spend-limit state, and
+  @cf/moonshotai/kimi-k2.6 availability.
 
 429 "Too many agent submissions."
   The authenticated user exceeded the Worker-side limit of 10 submissions per

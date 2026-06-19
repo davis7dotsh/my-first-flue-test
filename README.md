@@ -6,8 +6,8 @@ A deliberately small stateful agent stack on Cloudflare:
 - A second Worker runs a Flue agent backed by Durable Objects.
 - A Cloudflare service binding connects the SvelteKit Worker to the agent Worker.
 - Cloudflare Access authenticates requests and D1 stores the user-owned thread control plane.
-- Cloudflare's AI binding runs OpenAI GPT-5.5 through AI Gateway Unified Billing,
-  so there is no external model API key.
+- Cloudflare Workers AI runs Kimi K2.6 through AI Gateway, so there is no
+  external model API key or Unified Billing balance requirement.
 - The agent has evidence-first profiles, application-owned skills, and one typed runtime-check tool.
 - The UI displays Flue's Durable Streams events while the response runs.
 
@@ -66,6 +66,10 @@ cp agent/.dev.vars.example agent/.dev.vars
 bindings, not environment variables. They are already declared in the two
 `wrangler.jsonc` files. Agent submissions are limited to 10 per authenticated
 user per minute before they reach the private Worker.
+
+The current testing model is `@cf/moonshotai/kimi-k2.6` at low reasoning. It is
+covered by Workers AI's daily free allocation; requests fail after that
+allowance is exhausted unless the account is on Workers Paid.
 
 ## Run locally
 

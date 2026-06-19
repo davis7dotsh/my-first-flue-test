@@ -7,8 +7,8 @@
 - User-scoped thread creation, listing, loading, mutation, and proxy authorization.
 - Immediate D1 tombstones and conditional message admission without claiming
   Flue session deletion.
-- `research-agent` backed by OpenAI GPT-5.5 at low reasoning through the
-  Cloudflare AI binding, AI Gateway, and Unified Billing.
+- `research-agent` backed by Cloudflare-hosted Kimi K2.6 at low reasoning
+  through the Workers AI binding and AI Gateway free allocation for testing.
 - Per-user agent-submission rate limiting at the web Worker boundary.
 - Private agent deployment configuration with `workers.dev` and preview URLs disabled.
 - Self-contained researcher, code investigator, browser inspector, and reviewer profiles.
