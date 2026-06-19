@@ -14,3 +14,6 @@ minimumReleaseAgeExclude:
   - '@flue/sdk@1.0.0-beta.1'
   - '@flue/runtime@1.0.0-beta.1'
   - '@flue/cli@1.0.0-beta.1'
+  - '@cloudflare/vitest-pool-workers@0.16.16'
+  - miniflare@4.20260616.0
+  - wrangler@4.101.0

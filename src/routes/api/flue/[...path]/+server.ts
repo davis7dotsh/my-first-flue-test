@@ -1,43 +1,19 @@
 import { env } from '$env/dynamic/private';
+import { parseFlueAgentPath } from '$lib/server/flue-path';
 import {
+	AgentRequestTooLargeError,
+	stripAccessCredentials,
+	submittedMessage
+} from '$lib/server/flue-proxy';
+import {
+	admitThreadMessage,
 	getThread,
-	threadOwner,
 	threadsDb,
 	touchThread,
 	workerBindings
 } from '$lib/server/threads';
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-
-function agentTarget(path: string) {
-	const [resource, encodedAgentName, encodedThreadId, ...rest] = path.split('/');
-	if (resource !== 'agents' || !encodedAgentName || !encodedThreadId || rest.length > 0) {
-		return null;
-	}
-
-	return {
-		agentName: decodeURIComponent(encodedAgentName),
-		threadId: decodeURIComponent(encodedThreadId)
-	};
-}
-
-async function submittedMessage(request: Request) {
-	if (request.method !== 'POST') {
-		return null;
-	}
-
-	try {
-		const body: unknown = await request.clone().json();
-		if (typeof body !== 'object' || body === null) {
-			return null;
-		}
-
-		const message = Reflect.get(body, 'message');
-		return typeof message === 'string' ? message : null;
-	} catch {
-		return null;
-	}
-}
 
 function isAbortError(cause: unknown) {
 	return cause instanceof Error && cause.name === 'AbortError';
@@ -63,29 +39,58 @@ function localAgentUnavailableResponse() {
 	);
 }
 
-const proxy: RequestHandler = async ({ cookies, params, platform, request, url }) => {
+const proxy: RequestHandler = async ({ locals, params, platform, request, url }) => {
 	if (!params.path) {
 		error(404, 'Missing Flue route.');
 	}
 
-	const targetAgent = agentTarget(params.path);
+	const targetAgent = parseFlueAgentPath(params.path);
 	if (!targetAgent) {
 		error(404, 'Unknown Flue route.');
 	}
 
-	const ownerId = threadOwner(cookies, url);
 	const db = threadsDb(platform);
-	const thread = await getThread(db, ownerId, targetAgent.threadId);
+	let message: string | null;
+	try {
+		message = await submittedMessage(request);
+	} catch (cause) {
+		if (cause instanceof AgentRequestTooLargeError) {
+			return Response.json(
+				{ error: { type: 'request_too_large', message: cause.message } },
+				{ status: 413 }
+			);
+		}
+
+		throw cause;
+	}
+
+	const thread = message
+		? await admitThreadMessage(db, locals.user.id, targetAgent.threadId, targetAgent.agentName)
+		: await getThread(db, locals.user.id, targetAgent.threadId);
 	if (!thread || thread.agentName !== targetAgent.agentName) {
 		error(404, 'Thread not found.');
+	}
+
+	if (message) {
+		const limiter = workerBindings(platform).AI_SUBMISSION_RATE_LIMITER;
+		if (!limiter) {
+			error(503, 'The AI submission rate limiter is not connected.');
+		}
+
+		const { success } = await limiter.limit({ key: locals.user.id });
+		if (!success) {
+			return Response.json(
+				{ error: { type: 'rate_limited', message: 'Too many agent submissions.' } },
+				{ status: 429, headers: { 'retry-after': '60' } }
+			);
+		}
 	}
 
 	const localAgentUrl = env.FLUE_AGENT_URL?.replace(/\/$/, '');
 	const origin = localAgentUrl ?? 'https://flue-agent.internal';
 	const target = new URL(`/${params.path}`, origin);
 	target.search = url.search;
-	const message = await submittedMessage(request);
-	const upstreamRequest = new Request(target, request);
+	const upstreamRequest = stripAccessCredentials(new Request(target, request));
 
 	try {
 		let response: Response;
@@ -103,7 +108,7 @@ const proxy: RequestHandler = async ({ cookies, params, platform, request, url }
 		}
 
 		if (response.ok && message) {
-			await touchThread(db, ownerId, thread.id, message);
+			await touchThread(db, locals.user.id, thread.id, message);
 		}
 
 		return response;

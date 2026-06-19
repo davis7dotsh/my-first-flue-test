@@ -1,5 +1,5 @@
-import { error, type Cookies } from '@sveltejs/kit';
-import type { D1Database } from '@cloudflare/workers-types';
+import { error } from '@sveltejs/kit';
+import type { D1Database, RateLimit } from '@cloudflare/workers-types';
 import { DEFAULT_AGENT_NAME, NEW_THREAD_TITLE, type ThreadSummary } from '$lib/threads';
 
 type ThreadRow = {
@@ -11,9 +11,8 @@ type ThreadRow = {
 	updated_at: string;
 };
 
-const ownerCookie = 'flue-demo-owner';
-
 type WebBindings = {
+	AI_SUBMISSION_RATE_LIMITER: RateLimit;
 	FLUE_AGENT: {
 		fetch(request: Request): Promise<Response>;
 	};
@@ -37,23 +36,6 @@ export function threadsDb(platform: App.Platform | undefined) {
 	return db;
 }
 
-export function threadOwner(cookies: Cookies, url: URL) {
-	const existing = cookies.get(ownerCookie);
-	if (existing) {
-		return existing;
-	}
-
-	const ownerId = crypto.randomUUID();
-	cookies.set(ownerCookie, ownerId, {
-		path: '/',
-		httpOnly: true,
-		sameSite: 'lax',
-		secure: url.protocol === 'https:',
-		maxAge: 60 * 60 * 24 * 365
-	});
-	return ownerId;
-}
-
 function toThread(row: ThreadRow): ThreadSummary {
 	return {
 		id: row.id,
@@ -65,30 +47,40 @@ function toThread(row: ThreadRow): ThreadSummary {
 	};
 }
 
-export async function listThreads(db: D1Database, ownerId: string) {
+export async function listThreads(db: D1Database, userId: string) {
 	const result = await db
 		.prepare(
 			`SELECT id, agent_name, title, has_activity, created_at, updated_at
 			 FROM threads
-			 WHERE owner_id = ?1 AND archived_at IS NULL
+			 WHERE user_id = ?1
+			   AND archived_at IS NULL
+			   AND tombstoned_at IS NULL
 			 ORDER BY updated_at DESC, id DESC`
 		)
-		.bind(ownerId)
+		.bind(userId)
 		.all<ThreadRow>();
 
 	return result.results.map(toThread);
 }
 
-export async function createThread(db: D1Database, ownerId: string) {
+export async function createThread(db: D1Database, userId: string) {
 	const id = crypto.randomUUID();
 	const now = new Date().toISOString();
 
 	await db
 		.prepare(
-			`INSERT INTO threads (id, owner_id, agent_name, title, created_at, updated_at)
-			 VALUES (?1, ?2, ?3, ?4, ?5, ?5)`
+			`INSERT INTO threads (
+			     id,
+			     owner_id,
+			     user_id,
+			     agent_name,
+			     title,
+			     created_at,
+			     updated_at
+			 )
+			 VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?5)`
 		)
-		.bind(id, ownerId, DEFAULT_AGENT_NAME, NEW_THREAD_TITLE, now)
+		.bind(id, userId, DEFAULT_AGENT_NAME, NEW_THREAD_TITLE, now)
 		.run();
 
 	return {
@@ -101,33 +93,65 @@ export async function createThread(db: D1Database, ownerId: string) {
 	} satisfies ThreadSummary;
 }
 
-export async function getThread(db: D1Database, ownerId: string, id: string) {
+export async function getThread(db: D1Database, userId: string, id: string) {
 	const row = await db
 		.prepare(
 			`SELECT id, agent_name, title, has_activity, created_at, updated_at
 			 FROM threads
-			 WHERE id = ?1 AND owner_id = ?2 AND archived_at IS NULL`
+			 WHERE id = ?1
+			   AND user_id = ?2
+			   AND archived_at IS NULL
+			   AND tombstoned_at IS NULL`
 		)
-		.bind(id, ownerId)
+		.bind(id, userId)
 		.first<ThreadRow>();
 
 	return row ? toThread(row) : null;
 }
 
-export async function archiveThread(db: D1Database, ownerId: string, id: string) {
+export async function admitThreadMessage(
+	db: D1Database,
+	userId: string,
+	id: string,
+	agentName: string
+) {
+	const row = await db
+		.prepare(
+			`UPDATE threads
+			 SET updated_at = updated_at
+			 WHERE id = ?1
+			   AND user_id = ?2
+			   AND agent_name = ?3
+			   AND archived_at IS NULL
+			   AND tombstoned_at IS NULL
+			 RETURNING id, agent_name, title, has_activity, created_at, updated_at`
+		)
+		.bind(id, userId, agentName)
+		.first<ThreadRow>();
+
+	return row ? toThread(row) : null;
+}
+
+export async function tombstoneThread(db: D1Database, userId: string, id: string) {
+	const now = new Date().toISOString();
 	const result = await db
 		.prepare(
 			`UPDATE threads
-			 SET archived_at = ?1
-			 WHERE id = ?2 AND owner_id = ?3 AND archived_at IS NULL`
+			 SET status = 'deleting',
+			     cancellation_requested_at = COALESCE(cancellation_requested_at, ?1),
+			     tombstoned_at = ?1
+			 WHERE id = ?2
+			   AND user_id = ?3
+			   AND archived_at IS NULL
+			   AND tombstoned_at IS NULL`
 		)
-		.bind(new Date().toISOString(), id, ownerId)
+		.bind(now, id, userId)
 		.run();
 
 	return result.meta.changes > 0;
 }
 
-export async function touchThread(db: D1Database, ownerId: string, id: string, message: string) {
+export async function touchThread(db: D1Database, userId: string, id: string, message: string) {
 	const now = new Date().toISOString();
 	const title = message.replace(/\s+/g, ' ').trim().slice(0, 64) || NEW_THREAD_TITLE;
 
@@ -137,8 +161,11 @@ export async function touchThread(db: D1Database, ownerId: string, id: string, m
 			 SET updated_at = ?1,
 			     has_activity = 1,
 			     title = CASE WHEN title = ?2 THEN ?3 ELSE title END
-			 WHERE id = ?4 AND owner_id = ?5 AND archived_at IS NULL`
+			 WHERE id = ?4
+			   AND user_id = ?5
+			   AND archived_at IS NULL
+			   AND tombstoned_at IS NULL`
 		)
-		.bind(now, NEW_THREAD_TITLE, title, id, ownerId)
+		.bind(now, NEW_THREAD_TITLE, title, id, userId)
 		.run();
 }

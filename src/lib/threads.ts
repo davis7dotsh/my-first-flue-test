@@ -1,4 +1,4 @@
-export const DEFAULT_AGENT_NAME = 'demo-agent';
+export const DEFAULT_AGENT_NAME = 'research-agent';
 export const NEW_THREAD_TITLE = 'New thread';
 
 export type ThreadSummary = {
