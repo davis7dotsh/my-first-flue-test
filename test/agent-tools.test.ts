@@ -30,6 +30,16 @@ const getUrl = (input: Request | string | URL) => {
 	return new URL(typeof input === 'string' ? input : input.url);
 };
 
+const waitForMicrotasks = async (condition: () => boolean, failureMessage: string) => {
+	for (let attempt = 0; attempt < 100; attempt += 1) {
+		if (condition()) {
+			return;
+		}
+		await Promise.resolve();
+	}
+	throw new Error(failureMessage);
+};
+
 describe('research tool validation', () => {
 	const fetcher: ProviderFetch = async () => {
 		throw new Error('Validation should run before fetch.');
@@ -272,7 +282,7 @@ describe('Firecrawl tools', () => {
 
 	it('times out while reading a stalled response body', async () => {
 		const response = new Response(new ReadableStream({ start() {} }));
-		const deadline = createProviderDeadline({ timeoutMs: 5 });
+		const deadline = createProviderDeadline({ timeoutMs: 100 });
 		try {
 			await expect(readBoundedText(response, 100, 'Firecrawl', deadline)).rejects.toThrow(
 				'Firecrawl request timed out.'
@@ -288,7 +298,7 @@ describe('Firecrawl tools', () => {
 			requestSignal = init?.signal ?? undefined;
 			return new Response(new ReadableStream({ start() {} }));
 		};
-		const { searchWeb } = createFirecrawlTools({ apiKey: 'secret', fetcher, timeoutMs: 5 });
+		const { searchWeb } = createFirecrawlTools({ apiKey: 'secret', fetcher, timeoutMs: 100 });
 
 		await expect(searchWeb.execute({ query: 'workers' })).rejects.toThrow(
 			'Firecrawl request timed out.'
@@ -317,7 +327,7 @@ describe('Firecrawl tools', () => {
 		const { getWebContent } = createFirecrawlTools({
 			apiKey: 'secret',
 			fetcher,
-			timeoutMs: 25
+			timeoutMs: 100
 		});
 
 		const pending = getWebContent.execute({
@@ -328,9 +338,7 @@ describe('Firecrawl tools', () => {
 				'https://four.example'
 			]
 		});
-		while (calls < 3) {
-			await Promise.resolve();
-		}
+		await waitForMicrotasks(() => calls >= 3, 'The first Firecrawl scrape batch did not start.');
 		releaseFirstBatch();
 
 		await expect(pending).rejects.toThrow('Firecrawl request timed out.');
@@ -347,7 +355,7 @@ describe('Firecrawl tools', () => {
 		const timeoutTool = createFirecrawlTools({
 			apiKey: 'secret',
 			fetcher: hangingFetch,
-			timeoutMs: 5
+			timeoutMs: 100
 		}).searchWeb;
 
 		await expect(timeoutTool.execute({ query: 'workers' })).rejects.toThrow(
