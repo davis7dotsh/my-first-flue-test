@@ -325,7 +325,7 @@
 	}
 
 	function messageReasoning(message: LlmMessage) {
-		if (message.role !== 'assistant') {
+		if (message.role !== 'assistant' || typeof message.content === 'string') {
 			return '';
 		}
 
