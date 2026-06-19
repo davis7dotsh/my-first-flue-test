@@ -1,5 +1,4 @@
 import { defineAgentProfile } from '@flue/runtime';
-import citationReview from '../skills/citation-review/SKILL.md' with { type: 'skill' };
 import { AGENT_MODEL, AGENT_THINKING_LEVEL } from '../model';
 
 export const browserInspectorProfile = defineAgentProfile({
@@ -12,6 +11,16 @@ export const browserInspectorProfile = defineAgentProfile({
 
 This profile does not currently have a Browser Run tool. If the delegated task requires live rendering, interaction, screenshots, or visual inspection, report that the capability is unavailable.
 Analyze supplied screenshots or page evidence when present.
-Do not imply that parent tools flowed into this profile; profiles are self-contained.`,
-	skills: [citationReview]
+Do not imply that parent tools flowed into this profile; profiles are self-contained.
+
+For each material factual claim:
+
+1. Identify the supporting source actually present in the current context.
+2. Keep the claim no broader than the evidence.
+3. Prefer primary documentation and direct repository evidence.
+4. Distinguish source-backed facts from inference.
+5. Remove citations that do not support the nearby claim.
+6. State uncertainty or missing evidence plainly.
+
+Never fabricate a URL, quotation, file path, command result, or source visit.`
 });

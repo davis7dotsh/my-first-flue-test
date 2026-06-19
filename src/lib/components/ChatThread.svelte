@@ -12,6 +12,8 @@
 		buildUnsupportedHTML,
 		defaultRenderers
 	} from '@humanspeak/svelte-markdown';
+	import CodeBlock from './CodeBlock.svelte';
+	import MarkdownLink from './MarkdownLink.svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import {
@@ -34,6 +36,8 @@
 		role: 'assistant' | 'user';
 		text: string;
 		reasoning?: string;
+		submissionId?: string;
+		promptText?: string;
 	};
 
 	type ToolRun = {
@@ -79,6 +83,7 @@
 	let failedPrompt = $state('');
 	let lastPrompt = $state('');
 	let debugOpen = $state(false);
+	let copiedId = $state<string | null>(null);
 	let messageList: HTMLDivElement | undefined;
 	let promptInput: HTMLTextAreaElement | undefined;
 	let client: FlueClient | undefined;
@@ -91,7 +96,7 @@
 	let submissionUserIds = new SvelteMap<string, string>();
 	let submissionPrompts = new SvelteMap<string, string>();
 
-	const canSend = $derived(Boolean(prompt.trim() && !busy && !hydrating));
+	const canSend = $derived(Boolean(prompt.trim() && !hydrating));
 	const canRetry = $derived(Boolean(failedPrompt && !busy && !hydrating));
 	const runState = $derived<RunState>(
 		errorMessage ? 'error' : hydrating ? 'loading' : busy ? 'working' : 'idle'
@@ -107,7 +112,9 @@
 	);
 	const markdownRenderers = {
 		...defaultRenderers,
-		html: buildUnsupportedHTML()
+		html: buildUnsupportedHTML(),
+		link: MarkdownLink,
+		code: CodeBlock
 	};
 
 	onMount(() => {
@@ -413,13 +420,18 @@
 		if (!messageId) {
 			messageId = `assistant:${key}`;
 			assistantMessages.set(key, messageId);
+			const promptText = event.submissionId
+				? (submissionPrompts.get(event.submissionId) ?? findPrecedingUserText())
+				: findPrecedingUserText();
 			conversation = [
 				...conversation,
 				{
 					id: messageId,
 					kind: 'message',
 					role: 'assistant',
-					text: ''
+					text: '',
+					submissionId: event.submissionId,
+					promptText
 				}
 			];
 		}
@@ -427,6 +439,16 @@
 		return conversation.find(
 			(item): item is ChatMessage => item.kind === 'message' && item.id === messageId
 		);
+	}
+
+	function findPrecedingUserText(): string | undefined {
+		for (let i = conversation.length - 1; i >= 0; i--) {
+			const item = conversation[i];
+			if (item.kind === 'message' && item.role === 'user') {
+				return item.text;
+			}
+		}
+		return undefined;
 	}
 
 	function setAssistantText(event: AttachedAgentEvent, text: string, append: boolean) {
@@ -589,7 +611,7 @@
 	async function sendPrompt() {
 		const question = prompt.trim();
 		const flueClient = client;
-		if (!question || busy || hydrating || !flueClient) {
+		if (!question || hydrating || !flueClient) {
 			return;
 		}
 
@@ -684,6 +706,37 @@
 		await sendPrompt();
 	}
 
+	function copyMessage(item: ChatMessage) {
+		if (!navigator.clipboard) {
+			return;
+		}
+		void navigator.clipboard.writeText(item.text).then(
+			() => {
+				copiedId = item.id;
+				setTimeout(() => {
+					if (copiedId === item.id) {
+						copiedId = null;
+					}
+				}, 2000);
+			},
+			() => undefined
+		);
+	}
+
+	async function resend(text: string) {
+		prompt = text;
+		await tick();
+		await sendPrompt();
+	}
+
+	function retryMessage(item: ChatMessage) {
+		if (item.role === 'user') {
+			void resend(item.text);
+		} else if (item.promptText) {
+			void resend(item.promptText);
+		}
+	}
+
 	function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
 		void sendPrompt();
@@ -745,7 +798,13 @@
 				>
 					{#each conversation as item (item.id)}
 						{#if item.kind === 'message'}
-							<article class={['message', item.role === 'user' && 'user']}>
+							<article
+								class={[
+									'message',
+									item.role === 'user' && 'user',
+									item.role === 'assistant' && 'assistant'
+								]}
+							>
 								<span>{item.role === 'assistant' ? 'Agent' : 'You'}</span>
 								{#if item.role === 'assistant' && item.reasoning}
 									<details class="reasoning">
@@ -764,25 +823,51 @@
 										</div>
 									</details>
 								{/if}
-								<p>{item.text}</p>
+								{#if item.role === 'assistant'}
+									<div class="prose">
+										<SvelteMarkdown source={item.text} renderers={markdownRenderers} streaming />
+									</div>
+								{:else}
+									<p>{item.text}</p>
+								{/if}
+								{#if item.id !== 'welcome' && item.text}
+									<div class={['message-actions', item.role === 'user' && 'user']}>
+										<button
+											type="button"
+											class="message-action"
+											aria-label={copiedId === item.id ? 'Copied to clipboard' : 'Copy message'}
+											onclick={() => copyMessage(item)}
+										>
+											{copiedId === item.id ? 'Copied' : 'Copy'}
+										</button>
+										<button
+											type="button"
+											class="message-action"
+											aria-label="Retry message"
+											disabled={busy || (item.role === 'assistant' && !item.promptText)}
+											onclick={() => retryMessage(item)}
+										>
+											Retry
+										</button>
+									</div>
+								{/if}
 							</article>
 						{:else}
-							<details class={['tool-call', item.status === 'error' && 'error']}>
+							<details class={['tool-collapsed', item.status]}>
 								<summary>
-									<span class="tool-icon" aria-hidden="true">›_</span>
-									<strong>{item.name}</strong>
-									<span class={['tool-status', item.status]}>{item.status}</span>
+									<svg class="tool-icon" viewBox="0 0 16 16" aria-hidden="true">
+										<path
+											d="M5.5 1.5a1 1 0 0 0-1 1v2.586L3.207 2.793a1 1 0 0 0-1.414 1.414L3.586 6H1a1 1 0 0 0 0 2h2.586l-1.793 1.793a1 1 0 0 0 1.414 1.414L4.5 9.914V12.5a1 1 0 0 0 2 0V9.914l1.793 1.793a1 1 0 0 0 1.414-1.414L7.914 8H10.5a1 1 0 0 0 0-2H7.914l1.793-1.793a1 1 0 0 0-1.414-1.414L6.5 4.086V2.5a1 1 0 0 0-1-1z"
+										/>
+									</svg>
+									<span class="tool-name">{item.name}</span>
+									<span class={['tool-dot', item.status]} aria-hidden="true"></span>
+									<span class="sr-only">{item.status}</span>
 								</summary>
 								<div class="tool-body">
-									<div>
-										<span>Input</span>
-										<pre>{item.input}</pre>
-									</div>
+									<pre>{item.input}</pre>
 									{#if item.result}
-										<div>
-											<span>Result</span>
-											<pre>{item.result}</pre>
-										</div>
+										<pre>{item.result}</pre>
 									{/if}
 								</div>
 							</details>
@@ -790,7 +875,9 @@
 					{/each}
 
 					{#if busy}
-						<p class="working">Agent is working...</p>
+						<p class="working">
+							<span class="working-dot" aria-hidden="true"></span>Agent is working…
+						</p>
 					{/if}
 
 					{#if errorMessage}
@@ -822,10 +909,8 @@
 			onkeydown={handleKeydown}
 			placeholder="Message the agent..."
 			rows="2"
-			disabled={busy || hydrating}></textarea>
-		<button type="submit" disabled={!canSend} aria-label="Send message">
-			{busy ? '…' : '↑'}
-		</button>
+			disabled={hydrating}></textarea>
+		<button type="submit" disabled={!canSend} aria-label="Send message"> ↑ </button>
 	</form>
 </div>
 
@@ -954,8 +1039,14 @@
 		margin-left: auto;
 	}
 
+	.conversation-items {
+		display: flex;
+		flex-direction: column;
+		gap: 20px;
+	}
+
 	.message {
-		margin-bottom: 28px;
+		min-width: 0;
 	}
 
 	.message > span {
@@ -971,6 +1062,10 @@
 		font-size: 1rem;
 		line-height: 1.7;
 		white-space: pre-wrap;
+	}
+
+	.message.assistant .prose {
+		overflow-x: auto;
 	}
 
 	.reasoning {
@@ -1075,95 +1170,267 @@
 	.message.user p {
 		max-width: 82%;
 		border-radius: 18px 18px 4px 18px;
-		background: var(--contrast);
+		background: linear-gradient(135deg, var(--accent), var(--contrast));
 		padding: 11px 15px;
 		color: var(--contrast-text);
 		line-height: 1.5;
+		box-shadow: 0 4px 16px var(--accent-glow);
 	}
 
-	.tool-call {
-		margin: -10px 0 28px;
-		border: 1px solid var(--border);
-		border-radius: 10px;
-		background: var(--surface);
-		color: var(--text-soft);
-	}
-
-	.tool-call.error {
-		border-color: var(--danger-border);
-	}
-
-	.tool-call summary {
-		display: grid;
-		grid-template-columns: auto 1fr auto auto;
-		gap: 9px;
-		align-items: center;
-		min-height: 44px;
-		padding: 10px 12px;
-		cursor: pointer;
-		list-style: none;
+	.tool-inline {
+		margin-left: 4px;
+		color: var(--text-muted);
 		font-size: 0.78rem;
 	}
 
-	.tool-call summary::-webkit-details-marker {
-		display: none;
-	}
-
-	.tool-call summary::after {
-		content: '+';
-		grid-column: 4;
+	.tool-collapsed {
+		margin-left: 2px;
 		color: var(--text-faint);
-		font-size: 1rem;
+		font-size: 0.75rem;
 	}
 
-	.tool-call[open] summary::after {
-		content: '−';
-	}
-
-	.tool-icon {
-		color: var(--text-muted);
-		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-	}
-
-	.tool-status {
-		border-radius: 999px;
-		background: var(--sidebar);
-		padding: 3px 7px;
-		color: var(--text-muted);
-		font-size: 0.65rem;
-		font-weight: 700;
-	}
-
-	.tool-status.complete {
-		background: var(--success-surface);
-		color: var(--success-text);
-	}
-
-	.tool-status.error {
-		background: var(--danger-surface);
+	.tool-collapsed.error .tool-name {
 		color: var(--danger-text);
 	}
 
-	.tool-body {
-		display: grid;
-		gap: 1px;
-		border-top: 1px solid var(--border);
-		background: var(--border);
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
 	}
 
-	.tool-body > div {
-		min-width: 0;
-		background: var(--code-surface);
-		padding: 12px;
-	}
-
-	.tool-body span {
-		display: block;
-		margin-bottom: 6px;
+	.tool-collapsed summary {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		min-height: 22px;
+		padding: 2px 0;
+		cursor: pointer;
+		list-style: none;
 		color: var(--text-faint);
-		font-size: 0.65rem;
-		font-weight: 700;
-		text-transform: uppercase;
+	}
+
+	.tool-collapsed summary::-webkit-details-marker {
+		display: none;
+	}
+
+	.tool-collapsed summary:hover {
+		color: var(--text-muted);
+	}
+
+	.tool-icon {
+		flex: 0 0 auto;
+		width: 12px;
+		height: 12px;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 1.2;
+	}
+
+	.tool-name {
+		color: var(--text-faint);
+		font-weight: 500;
+	}
+
+	.tool-collapsed summary:hover .tool-name {
+		color: var(--text-muted);
+	}
+
+	.tool-dot {
+		width: 6px;
+		height: 6px;
+		flex: 0 0 auto;
+		border-radius: 50%;
+		background: var(--text-faint);
+	}
+
+	.tool-dot.complete {
+		background: var(--status-success);
+	}
+
+	.tool-dot.error {
+		background: var(--status-error);
+	}
+
+	.tool-dot.running {
+		background: var(--status-warning);
+		animation: pulse 1s ease-in-out infinite;
+	}
+
+	.tool-collapsed .tool-body {
+		display: grid;
+		gap: 6px;
+		margin: 4px 0 2px;
+		padding-left: 18px;
+	}
+
+	.tool-collapsed .tool-body pre {
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		background: var(--code-surface);
+		padding: 8px 10px;
+		font-size: 0.7rem;
+	}
+
+	/* Prose styles for assistant markdown content */
+	:global(.prose > :first-child) {
+		margin-top: 0;
+	}
+
+	:global(.prose > :last-child) {
+		margin-bottom: 0;
+	}
+
+	:global(.prose p) {
+		margin: 0 0 1.2em;
+		line-height: 1.7;
+		color: var(--text-soft);
+	}
+
+	:global(.prose h1),
+	:global(.prose h2),
+	:global(.prose h3),
+	:global(.prose h4) {
+		margin: 1.6em 0 0.6em;
+		font-weight: 650;
+		line-height: 1.35;
+		color: var(--text);
+	}
+
+	:global(.prose h1) {
+		font-size: 1.25rem;
+	}
+
+	:global(.prose h2) {
+		font-size: 1.15rem;
+	}
+
+	:global(.prose h3) {
+		font-size: 1.05rem;
+	}
+
+	:global(.prose h4) {
+		font-size: 1rem;
+	}
+
+	:global(.prose ul),
+	:global(.prose ol) {
+		margin: 0 0 1.2em;
+		padding-left: 1.4em;
+	}
+
+	:global(.prose li) {
+		margin: 0.3em 0;
+	}
+
+	:global(.prose pre) {
+		background: var(--code-surface);
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		padding: 14px 16px;
+		overflow-x: auto;
+		margin: 0 0 1.2em;
+		font-size: 0.85rem;
+	}
+
+	:global(.prose pre code) {
+		background: none;
+		padding: 0;
+		border-radius: 0;
+		font-size: inherit;
+	}
+
+	:global(.prose :not(pre) > code) {
+		background: var(--code-surface);
+		padding: 2px 5px;
+		border-radius: 4px;
+		font-size: 0.88em;
+		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	}
+
+	:global(.prose a) {
+		color: var(--accent);
+		text-underline-offset: 2px;
+		text-decoration: underline;
+	}
+
+	:global(.prose blockquote) {
+		border-left: 2px solid var(--border-strong);
+		padding-left: 12px;
+		margin: 0 0 1.2em;
+		color: var(--text-muted);
+	}
+
+	:global(.prose table) {
+		border-collapse: collapse;
+		width: 100%;
+		margin: 0 0 1.2em;
+	}
+
+	:global(.prose th),
+	:global(.prose td) {
+		border: 1px solid var(--border);
+		padding: 6px 10px;
+		text-align: left;
+	}
+
+	:global(.prose th) {
+		font-weight: 650;
+		background: var(--code-surface);
+	}
+
+	:global(.prose tr:nth-child(even) td) {
+		background: var(--code-surface);
+	}
+
+	:global(.prose hr) {
+		border: 0;
+		border-top: 1px solid var(--border);
+		margin: 1.6em 0;
+	}
+
+	:global(.prose strong) {
+		font-weight: 650;
+	}
+
+	:global(.prose img) {
+		max-width: 100%;
+		border-radius: 8px;
+	}
+
+	/* Per-message copy and retry buttons */
+	.message-actions {
+		display: flex;
+		gap: 8px;
+		margin-top: 6px;
+	}
+
+	.message-actions.user {
+		justify-content: flex-end;
+	}
+
+	.message-action {
+		min-height: 32px;
+		padding: 4px 8px;
+		border: 0;
+		background: transparent;
+		color: var(--text-faint);
+		font-size: 0.7rem;
+		cursor: pointer;
+		opacity: 0.5;
+	}
+
+	.message-action:hover,
+	.message-action:focus-visible {
+		opacity: 1;
+	}
+
+	.message-action:disabled {
+		opacity: 0.3;
+		cursor: default;
 	}
 
 	pre {
@@ -1177,8 +1444,19 @@
 	}
 
 	.working {
+		display: flex;
+		align-items: center;
+		gap: 6px;
 		color: var(--text-faint);
-		font-size: 0.78rem;
+		font-size: 0.72rem;
+	}
+
+	.working-dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--status-warning);
+		animation: pulse 1s ease-in-out infinite;
 	}
 
 	.run-error {
@@ -1239,19 +1517,19 @@
 		grid-template-columns: 1fr auto;
 		gap: 12px;
 		align-items: end;
-		border: 1px solid var(--border-strong);
+		border: 1px solid var(--border);
 		border-radius: 18px;
 		background: var(--surface);
 		padding: 11px 11px 11px 16px;
-		box-shadow: 0 12px 36px var(--shadow);
+		box-shadow: 0 8px 32px var(--shadow);
 		pointer-events: auto;
 	}
 
 	.composer:focus-within {
-		border-color: var(--text-faint);
+		border-color: var(--border-strong);
 		box-shadow:
-			0 0 0 3px color-mix(in srgb, var(--text-faint) 12%, transparent),
-			0 12px 36px var(--shadow);
+			0 0 0 3px var(--accent-soft),
+			0 8px 32px var(--shadow);
 	}
 
 	.composer label {
@@ -1285,10 +1563,11 @@
 		place-items: center;
 		border: 0;
 		border-radius: 11px;
-		background: var(--contrast);
+		background: linear-gradient(135deg, var(--accent), var(--contrast));
 		color: var(--contrast-text);
 		font-size: 1.15rem;
 		font-weight: 700;
+		box-shadow: 0 4px 12px var(--accent-glow);
 	}
 
 	.debug-button {
@@ -1298,17 +1577,19 @@
 		bottom: 122px;
 		display: flex;
 		align-items: center;
-		min-height: 44px;
-		gap: 7px;
-		border: 1px solid var(--border-strong);
-		border-radius: 999px;
-		background: var(--surface-raised);
-		padding: 8px 11px;
+		min-height: 32px;
+		gap: 6px;
+		border: 0;
+		border-radius: 8px;
+		background: transparent;
+		padding: 6px 8px;
+		color: var(--text-faint);
+		font-size: 0.68rem;
+		font-weight: 600;
+	}
+
+	.debug-button:hover {
 		color: var(--text-muted);
-		font-size: 0.72rem;
-		font-weight: 700;
-		box-shadow: 0 6px 20px var(--shadow);
-		backdrop-filter: blur(10px);
 	}
 
 	.debug-button span {
@@ -1320,12 +1601,12 @@
 
 	.debug-button span.working,
 	.debug-button span.loading {
-		background: #f59e0b;
+		background: var(--status-warning);
 		animation: pulse 1s ease-in-out infinite;
 	}
 
 	.debug-button span.error {
-		background: #ef4444;
+		background: var(--status-error);
 	}
 
 	.debug-panel {
@@ -1338,11 +1619,10 @@
 		max-height: min(520px, calc(100vh - 210px));
 		grid-template-rows: auto minmax(0, 1fr);
 		overflow: hidden;
-		border: 1px solid var(--border-strong);
-		border-radius: 14px;
+		border: 1px solid var(--border);
+		border-radius: 12px;
 		background: var(--surface);
-		box-shadow: 0 18px 50px var(--shadow-strong);
-		backdrop-filter: blur(14px);
+		box-shadow: 0 12px 40px var(--shadow-strong);
 	}
 
 	.debug-panel header,
@@ -1395,15 +1675,15 @@
 	}
 
 	.trace-item.active {
-		border-left-color: #f59e0b;
+		border-left-color: var(--status-warning);
 	}
 
 	.trace-item.success {
-		border-left-color: #22c55e;
+		border-left-color: var(--status-success);
 	}
 
 	.trace-item.error {
-		border-left-color: #ef4444;
+		border-left-color: var(--status-error);
 		background: var(--danger-surface);
 	}
 
