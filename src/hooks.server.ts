@@ -22,7 +22,16 @@ function accessConfig() {
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
-	const developmentIdentity = localDevelopmentIdentity(event.url, event.getClientAddress(), dev);
+	let clientAddress: string | undefined;
+	if (dev) {
+		try {
+			clientAddress = event.getClientAddress();
+		} catch {
+			// The Cloudflare Vite integration cannot always identify its internal loopback requests.
+		}
+	}
+
+	const developmentIdentity = localDevelopmentIdentity(event.url, clientAddress, dev);
 	if (developmentIdentity) {
 		event.locals.user = await resolveUser(threadsDb(event.platform), developmentIdentity);
 		return resolve(event);

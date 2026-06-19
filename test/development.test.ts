@@ -17,6 +17,13 @@ describe('local development identity', () => {
 		expect(localDevelopmentIdentity(new URL('http://localhost:5173'), '::1', false)).toBeNull();
 	});
 
+	it('allows a loopback dev request when the adapter cannot determine its client address', () => {
+		expect(localDevelopmentIdentity(new URL('http://127.0.0.1:5173'), undefined, true)).toEqual({
+			subject: 'local-development-user',
+			email: 'local-development@localhost.invalid'
+		});
+	});
+
 	it('does not trust a loopback hostname from a remote client', () => {
 		expect(
 			localDevelopmentIdentity(new URL('http://localhost:5173'), '203.0.113.10', true)
@@ -26,6 +33,12 @@ describe('local development identity', () => {
 	it('does not trust a non-loopback hostname from a local client', () => {
 		expect(
 			localDevelopmentIdentity(new URL('https://chat.example.com'), '127.0.0.1', true)
+		).toBeNull();
+	});
+
+	it('does not trust a non-loopback hostname when the client address is unavailable', () => {
+		expect(
+			localDevelopmentIdentity(new URL('https://chat.example.com'), undefined, true)
 		).toBeNull();
 	});
 });
