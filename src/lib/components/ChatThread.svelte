@@ -646,7 +646,9 @@
 			failedPrompt = question;
 			addTrace('error', detail, 'error');
 			busy = false;
-			unassignedOptimisticUserIds.delete(optimisticUserId);
+			if (unassignedOptimisticUserIds.delete(optimisticUserId)) {
+				conversation = conversation.filter((item) => item.id !== optimisticUserId);
+			}
 			prompt = question;
 			await scrollToLatest();
 		}
