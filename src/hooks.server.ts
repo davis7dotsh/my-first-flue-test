@@ -1,13 +1,17 @@
 import { dev } from '$app/environment';
 import { env } from '$env/dynamic/private';
-import { AccessAuthenticationError, authenticateAccessRequest } from '$lib/server/access';
+import {
+	AccessAuthenticationError,
+	authenticateAccessRequest,
+	normalizeAccessTeamDomain
+} from '$lib/server/access';
 import { localDevelopmentIdentity } from '$lib/server/development';
 import { threadsDb } from '$lib/server/threads';
 import { resolveUser } from '$lib/server/users';
 import type { Handle } from '@sveltejs/kit';
 
 function accessConfig() {
-	const teamDomain = env.CF_ACCESS_TEAM_DOMAIN;
+	const teamDomain = normalizeAccessTeamDomain(env.CF_ACCESS_TEAM_DOMAIN ?? '');
 	const audience = env.CF_ACCESS_AUD;
 
 	if (!teamDomain || !audience) {

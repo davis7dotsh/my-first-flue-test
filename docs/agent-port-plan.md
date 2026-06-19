@@ -152,15 +152,15 @@ The main agent should:
 
 Model strategy:
 
-- default general research model:
-  `cloudflare/@cf/moonshotai/kimi-k2.6`;
-- code-investigation profile:
-  `cloudflare/@cf/moonshotai/kimi-k2.7-code`;
+- launch default for the main agent and specialist profiles:
+  `cloudflare/openai/gpt-5.5`;
+- use low reasoning effort for agent model calls;
 - use structured results for classifications, plans, and workflow handoffs;
 - route all model calls through a named AI Gateway.
 
-The final model choice should be benchmarked against representative source-agent
-tasks before launch. Do not restore OpenRouter as an unmeasured fallback.
+Benchmark GPT-5.5 against representative source-agent tasks before production
+launch and change the default only from measured results. Do not restore
+OpenRouter as an unmeasured fallback.
 
 ### Profiles
 

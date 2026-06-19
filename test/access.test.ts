@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
 	AccessAuthenticationError,
 	authenticateAccessRequest,
+	normalizeAccessTeamDomain,
 	verifyAccessToken,
 	type AccessConfig
 } from '../src/lib/server/access';
@@ -38,6 +39,22 @@ function createToken(options?: { issuer?: string; audience?: string; expiresAt?:
 }
 
 describe('Cloudflare Access authentication', () => {
+	it('normalizes a valid Access team domain', () => {
+		expect(normalizeAccessTeamDomain('https://example.cloudflareaccess.com/')).toBe(
+			'https://example.cloudflareaccess.com'
+		);
+	});
+
+	it.each([
+		'not-a-url',
+		'http://example.cloudflareaccess.com',
+		'https://cloudflareaccess.com.evil.test',
+		'https://user@example.cloudflareaccess.com',
+		'https://example.cloudflareaccess.com/certs'
+	])('rejects an invalid Access team domain: %s', (teamDomain) => {
+		expect(normalizeAccessTeamDomain(teamDomain)).toBeNull();
+	});
+
 	it('accepts a valid Access JWT', async () => {
 		const token = await createToken();
 		const identity = await verifyAccessToken(token, config, key);

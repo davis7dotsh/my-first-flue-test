@@ -4,6 +4,7 @@ const sensitiveUpstreamHeaders = [
 	'authorization',
 	'cf-access-client-id',
 	'cf-access-client-secret',
+	'cf-access-authenticated-user-email',
 	'cf-access-jwt-assertion',
 	'cookie'
 ];

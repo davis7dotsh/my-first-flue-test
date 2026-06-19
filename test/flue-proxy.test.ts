@@ -34,6 +34,7 @@ describe('Flue proxy request handling', () => {
 				authorization: 'Bearer browser-token',
 				'cf-access-client-id': 'client-id',
 				'cf-access-client-secret': 'client-secret',
+				'cf-access-authenticated-user-email': 'researcher@example.com',
 				'cf-access-jwt-assertion': 'access-jwt',
 				cookie: 'CF_Authorization=cookie-token'
 			},
@@ -46,6 +47,7 @@ describe('Flue proxy request handling', () => {
 		expect(sanitized.headers.get('authorization')).toBeNull();
 		expect(sanitized.headers.get('cf-access-client-id')).toBeNull();
 		expect(sanitized.headers.get('cf-access-client-secret')).toBeNull();
+		expect(sanitized.headers.get('cf-access-authenticated-user-email')).toBeNull();
 		expect(sanitized.headers.get('cf-access-jwt-assertion')).toBeNull();
 		expect(sanitized.headers.get('cookie')).toBeNull();
 		await expect(sanitized.json()).resolves.toEqual({ message: 'Research this' });

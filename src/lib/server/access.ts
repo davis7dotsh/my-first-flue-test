@@ -20,6 +20,28 @@ export class AccessAuthenticationError extends Error {
 	}
 }
 
+export function normalizeAccessTeamDomain(teamDomain: string) {
+	try {
+		const url = new URL(teamDomain);
+		if (
+			url.protocol !== 'https:' ||
+			!url.hostname.endsWith('.cloudflareaccess.com') ||
+			url.port ||
+			url.username ||
+			url.password ||
+			url.pathname !== '/' ||
+			url.search ||
+			url.hash
+		) {
+			return null;
+		}
+
+		return url.origin;
+	} catch {
+		return null;
+	}
+}
+
 function issuerFor(teamDomain: string) {
 	return teamDomain.replace(/\/$/, '');
 }
