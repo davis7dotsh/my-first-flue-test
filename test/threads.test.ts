@@ -1,6 +1,12 @@
 import { env } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
-import { createThread, getThread, listThreads, tombstoneThread } from '../src/lib/server/threads';
+import {
+	admitThreadMessage,
+	createThread,
+	getThread,
+	listThreads,
+	tombstoneThread
+} from '../src/lib/server/threads';
 import { resolveUser } from '../src/lib/server/users';
 
 async function createUser(subject: string) {
@@ -66,5 +72,20 @@ describe('Access-owned threads', () => {
 		expect(row?.status).toBe('deleting');
 		expect(row?.cancellation_requested_at).not.toBeNull();
 		expect(row?.tombstoned_at).not.toBeNull();
+	});
+
+	it('linearizes message admission before deletion', async () => {
+		const user = await createUser('submitter');
+		const thread = await createThread(env.THREADS_DB, user.id);
+
+		expect(await admitThreadMessage(env.THREADS_DB, user.id, thread.id, thread.agentName)).toEqual(
+			thread
+		);
+
+		await tombstoneThread(env.THREADS_DB, user.id, thread.id);
+
+		expect(
+			await admitThreadMessage(env.THREADS_DB, user.id, thread.id, thread.agentName)
+		).toBeNull();
 	});
 });

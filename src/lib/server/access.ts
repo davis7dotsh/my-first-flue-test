@@ -1,6 +1,7 @@
 import { createRemoteJWKSet, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from 'jose';
 
 const accessJwtHeader = 'cf-access-jwt-assertion';
+const remoteKeys = new Map<string, JWTVerifyGetKey>();
 
 export type AccessConfig = {
 	teamDomain: string;
@@ -23,6 +24,16 @@ function issuerFor(teamDomain: string) {
 	return teamDomain.replace(/\/$/, '');
 }
 
+function remoteKeyFor(issuer: string) {
+	let key = remoteKeys.get(issuer);
+	if (!key) {
+		key = createRemoteJWKSet(new URL(`${issuer}/cdn-cgi/access/certs`));
+		remoteKeys.set(issuer, key);
+	}
+
+	return key;
+}
+
 function identityFromPayload(payload: JWTPayload): AccessIdentity {
 	if (typeof payload.sub !== 'string' || !payload.sub) {
 		throw new AccessAuthenticationError();
@@ -40,7 +51,7 @@ export async function verifyAccessToken(
 	key?: JWTVerifyGetKey
 ) {
 	const issuer = issuerFor(config.teamDomain);
-	const verificationKey = key ?? createRemoteJWKSet(new URL(`${issuer}/cdn-cgi/access/certs`));
+	const verificationKey = key ?? remoteKeyFor(issuer);
 
 	try {
 		const { payload } = await jwtVerify(token, verificationKey, {

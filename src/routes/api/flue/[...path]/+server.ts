@@ -1,26 +1,19 @@
 import { env } from '$env/dynamic/private';
 import { parseFlueAgentPath } from '$lib/server/flue-path';
-import { getThread, threadsDb, touchThread, workerBindings } from '$lib/server/threads';
+import {
+	AgentRequestTooLargeError,
+	stripAccessCredentials,
+	submittedMessage
+} from '$lib/server/flue-proxy';
+import {
+	admitThreadMessage,
+	getThread,
+	threadsDb,
+	touchThread,
+	workerBindings
+} from '$lib/server/threads';
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-
-async function submittedMessage(request: Request) {
-	if (request.method !== 'POST') {
-		return null;
-	}
-
-	try {
-		const body: unknown = await request.clone().json();
-		if (typeof body !== 'object' || body === null) {
-			return null;
-		}
-
-		const message = Reflect.get(body, 'message');
-		return typeof message === 'string' ? message : null;
-	} catch {
-		return null;
-	}
-}
 
 function isAbortError(cause: unknown) {
 	return cause instanceof Error && cause.name === 'AbortError';
@@ -57,17 +50,47 @@ const proxy: RequestHandler = async ({ locals, params, platform, request, url })
 	}
 
 	const db = threadsDb(platform);
-	const thread = await getThread(db, locals.user.id, targetAgent.threadId);
+	let message: string | null;
+	try {
+		message = await submittedMessage(request);
+	} catch (cause) {
+		if (cause instanceof AgentRequestTooLargeError) {
+			return Response.json(
+				{ error: { type: 'request_too_large', message: cause.message } },
+				{ status: 413 }
+			);
+		}
+
+		throw cause;
+	}
+
+	const thread = message
+		? await admitThreadMessage(db, locals.user.id, targetAgent.threadId, targetAgent.agentName)
+		: await getThread(db, locals.user.id, targetAgent.threadId);
 	if (!thread || thread.agentName !== targetAgent.agentName) {
 		error(404, 'Thread not found.');
+	}
+
+	if (message) {
+		const limiter = workerBindings(platform).AI_SUBMISSION_RATE_LIMITER;
+		if (!limiter) {
+			error(503, 'The AI submission rate limiter is not connected.');
+		}
+
+		const { success } = await limiter.limit({ key: locals.user.id });
+		if (!success) {
+			return Response.json(
+				{ error: { type: 'rate_limited', message: 'Too many agent submissions.' } },
+				{ status: 429, headers: { 'retry-after': '60' } }
+			);
+		}
 	}
 
 	const localAgentUrl = env.FLUE_AGENT_URL?.replace(/\/$/, '');
 	const origin = localAgentUrl ?? 'https://flue-agent.internal';
 	const target = new URL(`/${params.path}`, origin);
 	target.search = url.search;
-	const message = await submittedMessage(request);
-	const upstreamRequest = new Request(target, request);
+	const upstreamRequest = stripAccessCredentials(new Request(target, request));
 
 	try {
 		let response: Response;

@@ -300,7 +300,10 @@
 	}
 
 	.new-thread {
-		padding: 7px 9px;
+		display: flex;
+		min-height: 44px;
+		align-items: center;
+		padding: 7px 10px;
 		font-size: 0.68rem;
 		font-weight: 700;
 		text-decoration: none;
@@ -308,8 +311,8 @@
 
 	.theme-toggle {
 		display: grid;
-		width: 30px;
-		height: 30px;
+		width: 44px;
+		height: 44px;
 		place-items: center;
 		padding: 0;
 		cursor: pointer;
@@ -343,9 +346,10 @@
 
 	.thread-row > a {
 		display: grid;
+		min-height: 52px;
 		gap: 3px;
 		border-radius: 8px;
-		padding: 9px 34px 9px 10px;
+		padding: 9px 50px 9px 10px;
 		color: var(--text-muted);
 		text-decoration: none;
 	}
@@ -374,10 +378,10 @@
 	.delete-thread {
 		position: absolute;
 		top: 50%;
-		right: 6px;
+		right: 0;
 		display: grid;
-		width: 26px;
-		height: 26px;
+		width: 44px;
+		height: 44px;
 		place-items: center;
 		transform: translateY(-50%);
 		border: 0;

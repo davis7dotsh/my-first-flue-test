@@ -14,7 +14,14 @@
 	} from '@humanspeak/svelte-markdown';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { appendThreadHistoryEvent, eventKey, loadThreadHistory } from '$lib/chat-history';
+	import {
+		appendThreadHistoryEvent,
+		eventKey,
+		forgetPendingThreadPrompt,
+		loadPendingThreadPrompts,
+		loadThreadHistory,
+		rememberPendingThreadPrompt
+	} from '$lib/chat-history';
 	import type { ThreadSummary } from '$lib/threads';
 	import { onMount, tick } from 'svelte';
 	import { prefersReducedMotion } from 'svelte/motion';
@@ -48,6 +55,8 @@
 		tone: 'neutral' | 'active' | 'success' | 'error';
 	};
 
+	type RunState = 'error' | 'idle' | 'loading' | 'working';
+
 	let { thread }: { thread?: ThreadSummary } = $props();
 
 	function hasThread() {
@@ -67,6 +76,8 @@
 	let busy = $state(false);
 	let hydrating = $state(hasThread());
 	let errorMessage = $state('');
+	let failedPrompt = $state('');
+	let lastPrompt = $state('');
 	let debugOpen = $state(false);
 	let messageList: HTMLDivElement | undefined;
 	let promptInput: HTMLTextAreaElement | undefined;
@@ -76,8 +87,24 @@
 	let startFollowing: ((offset: string) => void) | undefined;
 	let processedEvents = new SvelteSet<string>();
 	let assistantMessages = new SvelteMap<string, string>();
+	let unassignedOptimisticUserIds = new SvelteSet<string>();
+	let submissionUserIds = new SvelteMap<string, string>();
+	let submissionPrompts = new SvelteMap<string, string>();
 
 	const canSend = $derived(Boolean(prompt.trim() && !busy && !hydrating));
+	const canRetry = $derived(Boolean(failedPrompt && !busy && !hydrating));
+	const runState = $derived<RunState>(
+		errorMessage ? 'error' : hydrating ? 'loading' : busy ? 'working' : 'idle'
+	);
+	const runStateLabel = $derived(
+		runState === 'error'
+			? 'Error'
+			: runState === 'loading'
+				? 'Loading'
+				: runState === 'working'
+					? 'Working'
+					: 'Idle'
+	);
 	const markdownRenderers = {
 		...defaultRenderers,
 		html: buildUnsupportedHTML()
@@ -98,6 +125,11 @@
 		busy = false;
 		hydrating = Boolean(thread);
 		errorMessage = '';
+		failedPrompt = '';
+		lastPrompt = '';
+		unassignedOptimisticUserIds = new SvelteSet<string>();
+		submissionUserIds = new SvelteMap<string, string>();
+		submissionPrompts = new SvelteMap<string, string>();
 
 		const activeThread = thread;
 		if (!activeThread) {
@@ -108,6 +140,22 @@
 				client = undefined;
 			};
 		}
+
+		const pendingPrompts = loadPendingThreadPrompts(activeThread.id);
+		conversation = [
+			welcomeMessage,
+			...pendingPrompts.map(
+				(prompt) =>
+					({
+						id: prompt.id,
+						kind: 'message',
+						role: 'user',
+						text: prompt.text
+					}) satisfies ChatMessage
+			)
+		];
+		unassignedOptimisticUserIds = new SvelteSet(pendingPrompts.map((prompt) => prompt.id));
+		lastPrompt = pendingPrompts.at(-1)?.text ?? '';
 
 		const follow = async (offset: string) => {
 			if (following || cancelled) {
@@ -137,6 +185,7 @@
 					} else {
 						const detail = error instanceof Error ? error.message : 'The agent stream failed.';
 						errorMessage = detail;
+						failedPrompt = mostRecentPrompt();
 						addTrace('error', detail, 'error');
 					}
 				}
@@ -210,6 +259,31 @@
 		];
 	}
 
+	function mostRecentPrompt() {
+		const submitted = [...submissionPrompts.values()].at(-1);
+		if (submitted) {
+			return submitted;
+		}
+		return lastPrompt;
+	}
+
+	function eventErrorDetail(error: unknown, fallback: string) {
+		if (error instanceof Error) {
+			return error.message;
+		}
+		if (typeof error === 'string' && error.trim()) {
+			return error;
+		}
+		if (error && typeof error === 'object' && 'message' in error) {
+			const message = error.message;
+			if (typeof message === 'string' && message.trim()) {
+				return message;
+			}
+		}
+
+		return fallback;
+	}
+
 	function captureMessageList(element: HTMLDivElement) {
 		messageList = element;
 
@@ -260,6 +334,69 @@
 			.map((block) => block.thinking)
 			.filter(Boolean)
 			.join('\n\n');
+	}
+
+	function reconcileUserMessage(event: AttachedAgentEvent, message: LlmMessage) {
+		if (message.role !== 'user') {
+			return;
+		}
+
+		const text = messageText(message);
+		lastPrompt = text;
+		const durableId = `user:${event.submissionId ?? 'session'}:${event.turnId ?? event.eventIndex}`;
+		if (event.submissionId) {
+			submissionPrompts.set(event.submissionId, text);
+		}
+
+		const existingIndex = conversation.findIndex(
+			(item) => item.kind === 'message' && item.id === durableId
+		);
+		if (existingIndex >= 0) {
+			conversation[existingIndex] = {
+				id: durableId,
+				kind: 'message',
+				role: 'user',
+				text
+			};
+			return;
+		}
+
+		let optimisticId = event.submissionId ? submissionUserIds.get(event.submissionId) : undefined;
+		if (!optimisticId) {
+			optimisticId = [...unassignedOptimisticUserIds].find((id) =>
+				conversation.some((item) => item.kind === 'message' && item.id === id && item.text === text)
+			);
+		}
+
+		const optimisticIndex = optimisticId
+			? conversation.findIndex((item) => item.kind === 'message' && item.id === optimisticId)
+			: -1;
+		if (optimisticIndex >= 0 && optimisticId) {
+			conversation[optimisticIndex] = {
+				id: durableId,
+				kind: 'message',
+				role: 'user',
+				text
+			};
+			unassignedOptimisticUserIds.delete(optimisticId);
+			if (thread) {
+				forgetPendingThreadPrompt(thread.id, optimisticId);
+			}
+			if (event.submissionId) {
+				submissionUserIds.delete(event.submissionId);
+			}
+			return;
+		}
+
+		conversation = [
+			...conversation,
+			{
+				id: durableId,
+				kind: 'message',
+				role: 'user',
+				text
+			}
+		];
 	}
 
 	function reasoningPreview(reasoning: string) {
@@ -342,17 +479,12 @@
 			case 'thinking_end':
 				setAssistantReasoning(event, event.content, false);
 				break;
+			case 'message_start':
+				reconcileUserMessage(event, event.message);
+				break;
 			case 'message_end':
 				if (event.message.role === 'user') {
-					conversation = [
-						...conversation,
-						{
-							id: `user:${event.submissionId ?? 'session'}:${event.eventIndex}`,
-							kind: 'message',
-							role: 'user',
-							text: messageText(event.message)
-						}
-					];
+					reconcileUserMessage(event, event.message);
 				} else if (event.message.role === 'assistant') {
 					const reasoning = messageReasoning(event.message);
 					if (reasoning) {
@@ -390,6 +522,12 @@
 				break;
 			}
 			case 'turn':
+				if (event.isError) {
+					errorMessage = eventErrorDetail(event.error, 'The model turn failed.');
+					failedPrompt = event.submissionId
+						? (submissionPrompts.get(event.submissionId) ?? mostRecentPrompt())
+						: mostRecentPrompt();
+				}
 				addTrace(
 					'turn',
 					event.isError
@@ -401,6 +539,10 @@
 			case 'submission_settled':
 				busy = false;
 				hydrating = false;
+				if (event.outcome === 'failed') {
+					errorMessage = event.error ?? 'The submission failed.';
+					failedPrompt = submissionPrompts.get(event.submissionId) ?? mostRecentPrompt();
+				}
 				addTrace(
 					'submission_settled',
 					event.outcome === 'completed'
@@ -432,8 +574,21 @@
 			return;
 		}
 
+		const optimisticUserId = `user:local:${crypto.randomUUID()}`;
+		conversation = [
+			...conversation,
+			{
+				id: optimisticUserId,
+				kind: 'message',
+				role: 'user',
+				text: question
+			}
+		];
+		unassignedOptimisticUserIds.add(optimisticUserId);
+		lastPrompt = question;
 		busy = true;
 		errorMessage = '';
+		failedPrompt = '';
 		prompt = '';
 
 		addTrace('send', 'Submitting the prompt.', 'active');
@@ -454,9 +609,18 @@
 				createdThread = newThread;
 			}
 
+			rememberPendingThreadPrompt(targetThread.id, {
+				id: optimisticUserId,
+				text: question
+			});
+
 			const receipt = await flueClient.agents.send(targetThread.agentName, targetThread.id, {
 				message: question
 			});
+			submissionPrompts.set(receipt.submissionId, question);
+			if (unassignedOptimisticUserIds.delete(optimisticUserId)) {
+				submissionUserIds.set(receipt.submissionId, optimisticUserId);
+			}
 			addTrace('admitted', `Submission ${receipt.submissionId.slice(-8)} was admitted.`, 'success');
 
 			if (createdThread) {
@@ -470,6 +634,7 @@
 			await invalidateAll();
 		} catch (error) {
 			if (createdThread) {
+				forgetPendingThreadPrompt(createdThread.id, optimisticUserId);
 				await fetch(`/api/threads/${encodeURIComponent(createdThread.id)}`, {
 					method: 'DELETE'
 				}).catch(() => undefined);
@@ -478,11 +643,24 @@
 
 			const detail = error instanceof Error ? error.message : 'The agent request failed.';
 			errorMessage = detail;
+			failedPrompt = question;
 			addTrace('error', detail, 'error');
 			busy = false;
+			unassignedOptimisticUserIds.delete(optimisticUserId);
 			prompt = question;
 			await scrollToLatest();
 		}
+	}
+
+	async function retryFailedPrompt() {
+		if (!canRetry) {
+			return;
+		}
+
+		prompt = failedPrompt;
+		failedPrompt = '';
+		await tick();
+		await sendPrompt();
 	}
 
 	function handleSubmit(event: SubmitEvent) {
@@ -593,6 +771,20 @@
 					{#if busy}
 						<p class="working">Agent is working...</p>
 					{/if}
+
+					{#if errorMessage}
+						<div class="run-error" role="alert">
+							<div>
+								<strong>The agent could not finish this run.</strong>
+								<p>{errorMessage}</p>
+							</div>
+							{#if failedPrompt}
+								<button type="button" disabled={!canRetry} onclick={() => void retryFailedPrompt()}>
+									Try again
+								</button>
+							{/if}
+						</div>
+					{/if}
 				</div>
 			{/if}
 		</div>
@@ -614,9 +806,6 @@
 			{busy ? '…' : '↑'}
 		</button>
 	</form>
-	{#if errorMessage}
-		<p class="error-message">{errorMessage}</p>
-	{/if}
 </div>
 
 <button
@@ -626,8 +815,8 @@
 	aria-expanded={debugOpen}
 	onclick={() => (debugOpen = !debugOpen)}
 >
-	Debug
-	<span class={busy ? 'live' : undefined}></span>
+	Debug · {runStateLabel}
+	<span class={runState} aria-hidden="true"></span>
 </button>
 
 {#if debugOpen}
@@ -773,6 +962,7 @@
 		grid-template-columns: auto minmax(0, 1fr) auto;
 		gap: 9px;
 		align-items: center;
+		min-height: 44px;
 		padding: 0;
 		cursor: pointer;
 		list-style: none;
@@ -887,6 +1077,7 @@
 		grid-template-columns: auto 1fr auto auto;
 		gap: 9px;
 		align-items: center;
+		min-height: 44px;
 		padding: 10px 12px;
 		cursor: pointer;
 		list-style: none;
@@ -969,6 +1160,45 @@
 		font-size: 0.78rem;
 	}
 
+	.run-error {
+		display: flex;
+		justify-content: space-between;
+		gap: 16px;
+		align-items: center;
+		margin-top: 18px;
+		border: 1px solid var(--danger-border);
+		border-radius: 12px;
+		background: var(--danger-surface);
+		padding: 12px 14px;
+		color: var(--danger-text);
+	}
+
+	.run-error strong {
+		font-size: 0.82rem;
+	}
+
+	.run-error > div {
+		min-width: 0;
+	}
+
+	.run-error p {
+		margin-top: 4px;
+		font-size: 0.75rem;
+		line-height: 1.45;
+		overflow-wrap: anywhere;
+	}
+
+	.run-error button {
+		min-width: 88px;
+		min-height: 44px;
+		border: 1px solid var(--danger-border);
+		border-radius: 9px;
+		background: var(--surface);
+		color: var(--danger-text);
+		font-size: 0.75rem;
+		font-weight: 700;
+	}
+
 	.composer-shell {
 		position: absolute;
 		z-index: 10;
@@ -1029,8 +1259,8 @@
 
 	.composer button {
 		display: grid;
-		width: 38px;
-		height: 38px;
+		width: 44px;
+		height: 44px;
 		place-items: center;
 		border: 0;
 		border-radius: 11px;
@@ -1040,14 +1270,6 @@
 		font-weight: 700;
 	}
 
-	.error-message {
-		width: min(1040px, 100%);
-		margin: 7px auto 0;
-		color: var(--danger-text);
-		font-size: 0.72rem;
-		pointer-events: auto;
-	}
-
 	.debug-button {
 		position: absolute;
 		z-index: 30;
@@ -1055,6 +1277,7 @@
 		bottom: 122px;
 		display: flex;
 		align-items: center;
+		min-height: 44px;
 		gap: 7px;
 		border: 1px solid var(--border-strong);
 		border-radius: 999px;
@@ -1071,12 +1294,17 @@
 		width: 7px;
 		height: 7px;
 		border-radius: 50%;
-		background: #22c55e;
+		background: var(--text-faint);
 	}
 
-	.debug-button span.live {
+	.debug-button span.working,
+	.debug-button span.loading {
 		background: #f59e0b;
 		animation: pulse 1s ease-in-out infinite;
+	}
+
+	.debug-button span.error {
+		background: #ef4444;
 	}
 
 	.debug-panel {
@@ -1124,6 +1352,10 @@
 	}
 
 	.debug-panel header button {
+		display: grid;
+		width: 44px;
+		height: 44px;
+		place-items: center;
 		border: 0;
 		background: transparent;
 		padding: 2px 4px;
@@ -1202,6 +1434,15 @@
 
 		.message.user p {
 			max-width: 90%;
+		}
+
+		.run-error {
+			align-items: stretch;
+			flex-direction: column;
+		}
+
+		.run-error button {
+			align-self: flex-start;
 		}
 
 		.debug-button {

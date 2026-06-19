@@ -1,13 +1,14 @@
 import { defineAgentProfile } from '@flue/runtime';
 import citationReview from '../skills/citation-review/SKILL.md' with { type: 'skill' };
 import codeInvestigation from '../skills/code-investigation/SKILL.md' with { type: 'skill' };
+import { AGENT_MODEL, AGENT_THINKING_LEVEL } from '../model';
 
 export const codeInvestigatorProfile = defineAgentProfile({
 	name: 'code_investigator',
 	description:
 		'Acquires and analyzes public repository snapshots using the shared sandbox, then reports concrete code evidence.',
-	model: 'cloudflare/@cf/moonshotai/kimi-k2.7-code',
-	thinkingLevel: 'high',
+	model: AGENT_MODEL,
+	thinkingLevel: AGENT_THINKING_LEVEL,
 	instructions: `Investigate code with a strict evidence trail.
 
 You have an isolated virtual workspace with file tools, a lightweight bash implementation, curl, and tar. It is not the host filesystem and may start empty.

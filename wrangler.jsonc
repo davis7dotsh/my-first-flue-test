@@ -17,6 +17,16 @@
 			"service": "flue-sveltekit-agent"
 		}
 	],
+	"ratelimits": [
+		{
+			"name": "AI_SUBMISSION_RATE_LIMITER",
+			"namespace_id": "20260617",
+			"simple": {
+				"limit": 10,
+				"period": 60
+			}
+		}
+	],
 	"observability": {
 		"enabled": true
 	},

@@ -1,4 +1,4 @@
-# Optional local override. Production defaults to the value in agent/wrangler.jsonc.
-AI_GATEWAY_ID=default
+# Optional local override. Production uses the dedicated gateway in agent/wrangler.jsonc.
+AI_GATEWAY_ID=flue-sveltekit-demo-dev
 
-# Workers AI uses the configured AI binding and does not require a model API key.
+# Cloudflare Unified Billing uses the AI binding and does not require a model API key.

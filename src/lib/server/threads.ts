@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, RateLimit } from '@cloudflare/workers-types';
 import { DEFAULT_AGENT_NAME, NEW_THREAD_TITLE, type ThreadSummary } from '$lib/threads';
 
 type ThreadRow = {
@@ -12,6 +12,7 @@ type ThreadRow = {
 };
 
 type WebBindings = {
+	AI_SUBMISSION_RATE_LIMITER: RateLimit;
 	FLUE_AGENT: {
 		fetch(request: Request): Promise<Response>;
 	};
@@ -103,6 +104,29 @@ export async function getThread(db: D1Database, userId: string, id: string) {
 			   AND tombstoned_at IS NULL`
 		)
 		.bind(id, userId)
+		.first<ThreadRow>();
+
+	return row ? toThread(row) : null;
+}
+
+export async function admitThreadMessage(
+	db: D1Database,
+	userId: string,
+	id: string,
+	agentName: string
+) {
+	const row = await db
+		.prepare(
+			`UPDATE threads
+			 SET updated_at = updated_at
+			 WHERE id = ?1
+			   AND user_id = ?2
+			   AND agent_name = ?3
+			   AND archived_at IS NULL
+			   AND tombstoned_at IS NULL
+			 RETURNING id, agent_name, title, has_activity, created_at, updated_at`
+		)
+		.bind(id, userId, agentName)
 		.first<ThreadRow>();
 
 	return row ? toThread(row) : null;

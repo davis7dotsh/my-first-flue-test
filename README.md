@@ -6,7 +6,8 @@ A deliberately small stateful agent stack on Cloudflare:
 - A second Worker runs a Flue agent backed by Durable Objects.
 - A Cloudflare service binding connects the SvelteKit Worker to the agent Worker.
 - Cloudflare Access authenticates requests and D1 stores the user-owned thread control plane.
-- Workers AI provides the model through AI Gateway, so there is no external model API key.
+- Cloudflare's AI binding runs OpenAI GPT-5.5 through AI Gateway Unified Billing,
+  so there is no external model API key.
 - The agent has evidence-first profiles, application-owned skills, and one typed runtime-check tool.
 - The UI displays Flue's Durable Streams events while the response runs.
 
@@ -45,15 +46,15 @@ cp .env.example .env
 | `FLUE_AGENT_URL`        | Root `.env`, local only    | Sends the SvelteKit proxy to the locally running Flue agent.           |
 | `CF_ACCESS_TEAM_DOMAIN` | Root `.env` and web Worker | Cloudflare Access issuer, such as `https://team.cloudflareaccess.com`. |
 | `CF_ACCESS_AUD`         | Root `.env` and web Worker | Audience tag for the Access application protecting the web Worker.     |
-| `AI_GATEWAY_ID`         | Agent Wrangler config      | AI Gateway ID used by the Workers AI provider.                         |
+| `AI_GATEWAY_ID`         | Agent Wrangler config      | AI Gateway ID used by the Cloudflare AI binding.                       |
 
 For the deployed web Worker, add `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD`
 under **Workers & Pages > flue-sveltekit-demo > Settings > Variables and
 Secrets**. Do not set `FLUE_AGENT_URL` in production; the Worker uses the
 `FLUE_AGENT` service binding instead.
 
-The agent needs no model API key. Its `AI` binding and default
-`AI_GATEWAY_ID=default` are already configured in `agent/wrangler.jsonc`. Copy
+The agent needs no model API key. Its `AI` binding and dedicated production
+`AI_GATEWAY_ID=flue-sveltekit-demo` are configured in `agent/wrangler.jsonc`. Copy
 `agent/.dev.vars.example` to `agent/.dev.vars` only when you want a local
 gateway override:
 
@@ -61,8 +62,10 @@ gateway override:
 cp agent/.dev.vars.example agent/.dev.vars
 ```
 
-`THREADS_DB`, `FLUE_AGENT`, and `AI` are Wrangler bindings, not environment
-variables. They are already declared in the two `wrangler.jsonc` files.
+`THREADS_DB`, `FLUE_AGENT`, `AI_SUBMISSION_RATE_LIMITER`, and `AI` are Wrangler
+bindings, not environment variables. They are already declared in the two
+`wrangler.jsonc` files. Agent submissions are limited to 10 per authenticated
+user per minute before they reach the private Worker.
 
 ## Run locally
 
@@ -72,11 +75,12 @@ Install dependencies once:
 pnpm install
 ```
 
-Set `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` in `.env` to a real Access
-application before making requests. Authentication fails closed when either
-value or the `Cf-Access-Jwt-Assertion` header is missing. Setting the variables
-does not bypass Access: a plain localhost request without a valid assertion
-still receives `403 Forbidden`.
+Vite binds the SvelteKit development server to `127.0.0.1` by default, so open
+`http://127.0.0.1:5173` (or `http://localhost:5173` when `localhost` resolves to
+IPv4). The app assigns one stable development identity only when both the
+request hostname and client address are loopback. All production and
+non-loopback requests still fail closed when the Access configuration or
+`Cf-Access-Jwt-Assertion` header is missing or invalid.
 
 Apply the D1 schema to local development storage:
 
@@ -107,9 +111,19 @@ authorization and list projections, not a second transcript. Opening
 live. A refresh during generation therefore rebuilds completed history and
 continues receiving the in-flight response.
 
+The current Flue SDK can abort the HTTP request while a submission is being
+admitted and can cancel a client event-stream reader, but it does not expose an
+API that cancels an already-admitted durable agent submission. The UI therefore
+does not present a misleading Stop button: closing the stream would only hide
+progress while the model run continued server-side. Add Stop only after Flue
+provides a durable cancellation endpoint with an observable terminal event.
+
 Thread deletion currently writes an immediate D1 tombstone and returns
 `202 Accepted`. It does not claim to delete the generated Flue Durable Object;
-that lifecycle operation remains a compatibility spike.
+that lifecycle operation remains a compatibility spike. The intended lifecycle
+is an idempotent Queue job that retries Flue session deletion and marks D1
+cleanup complete once the Durable Object state is erased. The queue should not
+be added until Flue exposes authenticated addressable session deletion.
 
 ## Check the project
 
@@ -153,5 +167,8 @@ The production SvelteKit Worker uses its `FLUE_AGENT` service binding. `FLUE_AGE
   the web Worker's service binding.
 - AI Gateway content logging is disabled until a retention and access policy is
   defined.
+- Configure the test gateway with a global $5/day spend limit. The Worker-side
+  limiter controls submission bursts; the gateway limit bounds aggregate model
+  spend across retries and subagents.
 - See `docs/agent-port-implementation-status.md` for implemented scope and
   remaining feasibility work.

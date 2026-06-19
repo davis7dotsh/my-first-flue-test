@@ -1,5 +1,7 @@
+import { dev } from '$app/environment';
 import { env } from '$env/dynamic/private';
 import { AccessAuthenticationError, authenticateAccessRequest } from '$lib/server/access';
+import { localDevelopmentIdentity } from '$lib/server/development';
 import { threadsDb } from '$lib/server/threads';
 import { resolveUser } from '$lib/server/users';
 import type { Handle } from '@sveltejs/kit';
@@ -16,6 +18,12 @@ function accessConfig() {
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
+	const developmentIdentity = localDevelopmentIdentity(event.url, event.getClientAddress(), dev);
+	if (developmentIdentity) {
+		event.locals.user = await resolveUser(threadsDb(event.platform), developmentIdentity);
+		return resolve(event);
+	}
+
 	const config = accessConfig();
 	if (!config) {
 		return new Response('Cloudflare Access authentication is not configured.', {

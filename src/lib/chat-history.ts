@@ -13,13 +13,88 @@ type CachedThreadHistory = {
 	offset: string;
 };
 
+export type PendingThreadPrompt = {
+	id: string;
+	text: string;
+};
+
 // Loose upper bound — keep recently visited threads warm without letting the
 // client-side cache grow without limit over a long session. Evicts the
 // least-recently-used thread once exceeded.
 const MAX_CACHED_THREADS = 100;
+const MAX_PENDING_PROMPTS_PER_THREAD = 20;
+const PENDING_PROMPTS_KEY_PREFIX = 'flue:pending-prompts:';
 
 const histories = new Map<string, CachedThreadHistory>();
 const pendingHistories = new Map<string, Promise<CachedThreadHistory>>();
+
+function pendingPromptsKey(threadId: string) {
+	return `${PENDING_PROMPTS_KEY_PREFIX}${encodeURIComponent(threadId)}`;
+}
+
+export function loadPendingThreadPrompts(threadId: string) {
+	if (!browser) {
+		return [] satisfies PendingThreadPrompt[];
+	}
+
+	try {
+		const stored = localStorage.getItem(pendingPromptsKey(threadId));
+		if (!stored) {
+			return [];
+		}
+
+		const parsed: unknown = JSON.parse(stored);
+		if (!Array.isArray(parsed)) {
+			return [];
+		}
+
+		return parsed.filter((item): item is PendingThreadPrompt =>
+			Boolean(
+				item &&
+				typeof item === 'object' &&
+				'id' in item &&
+				typeof item.id === 'string' &&
+				'text' in item &&
+				typeof item.text === 'string'
+			)
+		);
+	} catch {
+		return [];
+	}
+}
+
+export function rememberPendingThreadPrompt(threadId: string, prompt: PendingThreadPrompt) {
+	if (!browser) {
+		return;
+	}
+
+	const prompts = loadPendingThreadPrompts(threadId).filter((item) => item.id !== prompt.id);
+	try {
+		localStorage.setItem(
+			pendingPromptsKey(threadId),
+			JSON.stringify([...prompts, prompt].slice(-MAX_PENDING_PROMPTS_PER_THREAD))
+		);
+	} catch {
+		// The in-memory optimistic message still works when browser storage is unavailable.
+	}
+}
+
+export function forgetPendingThreadPrompt(threadId: string, promptId: string) {
+	if (!browser) {
+		return;
+	}
+
+	const prompts = loadPendingThreadPrompts(threadId).filter((item) => item.id !== promptId);
+	try {
+		if (prompts.length) {
+			localStorage.setItem(pendingPromptsKey(threadId), JSON.stringify(prompts));
+		} else {
+			localStorage.removeItem(pendingPromptsKey(threadId));
+		}
+	} catch {
+		// Storage cleanup is best-effort and never blocks durable history rendering.
+	}
+}
 
 export function eventKey(event: AttachedAgentEvent) {
 	return [event.submissionId ?? 'session', event.eventIndex, event.timestamp, event.type].join(':');
@@ -129,4 +204,9 @@ export function deleteThreadHistory(threadId: string) {
 
 	histories.delete(threadId);
 	pendingHistories.delete(threadId);
+	try {
+		localStorage.removeItem(pendingPromptsKey(threadId));
+	} catch {
+		// Storage cleanup is best-effort.
+	}
 }
