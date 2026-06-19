@@ -1042,11 +1042,11 @@
 	.conversation-items {
 		display: flex;
 		flex-direction: column;
-		gap: 20px;
 	}
 
 	.message {
 		min-width: 0;
+		margin-bottom: 24px;
 	}
 
 	.message > span {
@@ -1184,9 +1184,10 @@
 	}
 
 	.tool-collapsed {
-		margin-left: 2px;
+		margin: 0;
 		color: var(--text-faint);
-		font-size: 0.75rem;
+		font-size: 0.72rem;
+		line-height: 1.4;
 	}
 
 	.tool-collapsed.error .tool-name {
@@ -1205,9 +1206,9 @@
 	.tool-collapsed summary {
 		display: flex;
 		align-items: center;
-		gap: 6px;
-		min-height: 22px;
-		padding: 2px 0;
+		gap: 5px;
+		min-height: 18px;
+		padding: 0;
 		cursor: pointer;
 		list-style: none;
 		color: var(--text-faint);
@@ -1223,8 +1224,8 @@
 
 	.tool-icon {
 		flex: 0 0 auto;
-		width: 12px;
-		height: 12px;
+		width: 10px;
+		height: 10px;
 		fill: none;
 		stroke: currentColor;
 		stroke-width: 1.2;
@@ -1240,8 +1241,8 @@
 	}
 
 	.tool-dot {
-		width: 6px;
-		height: 6px;
+		width: 5px;
+		height: 5px;
 		flex: 0 0 auto;
 		border-radius: 50%;
 		background: var(--text-faint);
@@ -1262,17 +1263,18 @@
 
 	.tool-collapsed .tool-body {
 		display: grid;
-		gap: 6px;
-		margin: 4px 0 2px;
-		padding-left: 18px;
+		gap: 4px;
+		margin: 2px 0 0;
+		padding-left: 15px;
 	}
 
 	.tool-collapsed .tool-body pre {
 		border: 1px solid var(--border);
-		border-radius: 6px;
+		border-radius: 4px;
 		background: var(--code-surface);
-		padding: 8px 10px;
-		font-size: 0.7rem;
+		padding: 6px 8px;
+		font-size: 0.68rem;
+		line-height: 1.4;
 	}
 
 	/* Prose styles for assistant markdown content */
@@ -1447,6 +1449,7 @@
 		display: flex;
 		align-items: center;
 		gap: 6px;
+		margin-top: 4px;
 		color: var(--text-faint);
 		font-size: 0.72rem;
 	}

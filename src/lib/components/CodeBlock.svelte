@@ -112,75 +112,75 @@ styles continue to apply.
 <style>
 	/* Token colors adapted for the deep blue theme. */
 	:global(:root) {
-		--hl-comment: #363e50;
-		--hl-keyword: #6b8eff;
-		--hl-string: #3eb894;
-		--hl-number: #a888ff;
-		--hl-literal: #a888ff;
-		--hl-built-in: #5a9eff;
-		--hl-type: #5a9eff;
-		--hl-function: #6b8eff;
-		--hl-title: #6b8eff;
-		--hl-attr: #5a9eff;
-		--hl-attribute: #5a9eff;
-		--hl-tag: #3eb894;
-		--hl-name: #3eb894;
-		--hl-variable: #d4a060;
-		--hl-property: #5a9eff;
-		--hl-meta: #363e50;
-		--hl-regexp: #3eb894;
-		--hl-symbol: #a888ff;
-		--hl-addition: #3eb894;
-		--hl-deletion: #dc6470;
+		--hl-comment: #4a5470;
+		--hl-keyword: #7c9eff;
+		--hl-string: #4ec9a0;
+		--hl-number: #b888ff;
+		--hl-literal: #b888ff;
+		--hl-built-in: #6ba6ff;
+		--hl-type: #6ba6ff;
+		--hl-function: #7c9eff;
+		--hl-title: #7c9eff;
+		--hl-attr: #6ba6ff;
+		--hl-attribute: #6ba6ff;
+		--hl-tag: #4ec9a0;
+		--hl-name: #4ec9a0;
+		--hl-variable: #d4a860;
+		--hl-property: #6ba6ff;
+		--hl-meta: #4a5470;
+		--hl-regexp: #4ec9a0;
+		--hl-symbol: #b888ff;
+		--hl-addition: #4ec9a0;
+		--hl-deletion: #e06070;
 		--hl-text: var(--text-soft);
 	}
 
 	:global(:root[data-theme='dark']) {
-		--hl-comment: #363e50;
-		--hl-keyword: #6b8eff;
-		--hl-string: #3eb894;
-		--hl-number: #a888ff;
-		--hl-literal: #a888ff;
-		--hl-built-in: #5a9eff;
-		--hl-type: #5a9eff;
-		--hl-function: #6b8eff;
-		--hl-title: #6b8eff;
-		--hl-attr: #5a9eff;
-		--hl-attribute: #5a9eff;
-		--hl-tag: #3eb894;
-		--hl-name: #3eb894;
-		--hl-variable: #d4a060;
-		--hl-property: #5a9eff;
-		--hl-meta: #363e50;
-		--hl-regexp: #3eb894;
-		--hl-symbol: #a888ff;
-		--hl-addition: #3eb894;
-		--hl-deletion: #dc6470;
+		--hl-comment: #4a5470;
+		--hl-keyword: #7c9eff;
+		--hl-string: #4ec9a0;
+		--hl-number: #b888ff;
+		--hl-literal: #b888ff;
+		--hl-built-in: #6ba6ff;
+		--hl-type: #6ba6ff;
+		--hl-function: #7c9eff;
+		--hl-title: #7c9eff;
+		--hl-attr: #6ba6ff;
+		--hl-attribute: #6ba6ff;
+		--hl-tag: #4ec9a0;
+		--hl-name: #4ec9a0;
+		--hl-variable: #d4a860;
+		--hl-property: #6ba6ff;
+		--hl-meta: #4a5470;
+		--hl-regexp: #4ec9a0;
+		--hl-symbol: #b888ff;
+		--hl-addition: #4ec9a0;
+		--hl-deletion: #e06070;
 		--hl-text: var(--text-soft);
 	}
 
 	@media (prefers-color-scheme: dark) {
 		:global(:root:not([data-theme])) {
-			--hl-comment: #363e50;
-			--hl-keyword: #6b8eff;
-			--hl-string: #3eb894;
-			--hl-number: #a888ff;
-			--hl-literal: #a888ff;
-			--hl-built-in: #5a9eff;
-			--hl-type: #5a9eff;
-			--hl-function: #6b8eff;
-			--hl-title: #6b8eff;
-			--hl-attr: #5a9eff;
-			--hl-attribute: #5a9eff;
-			--hl-tag: #3eb894;
-			--hl-name: #3eb894;
-			--hl-variable: #d4a060;
-			--hl-property: #5a9eff;
-			--hl-meta: #363e50;
-			--hl-regexp: #3eb894;
-			--hl-symbol: #a888ff;
-			--hl-addition: #3eb894;
-			--hl-deletion: #dc6470;
+			--hl-comment: #4a5470;
+			--hl-keyword: #7c9eff;
+			--hl-string: #4ec9a0;
+			--hl-number: #b888ff;
+			--hl-literal: #b888ff;
+			--hl-built-in: #6ba6ff;
+			--hl-type: #6ba6ff;
+			--hl-function: #7c9eff;
+			--hl-title: #7c9eff;
+			--hl-attr: #6ba6ff;
+			--hl-attribute: #6ba6ff;
+			--hl-tag: #4ec9a0;
+			--hl-name: #4ec9a0;
+			--hl-variable: #d4a860;
+			--hl-property: #6ba6ff;
+			--hl-meta: #4a5470;
+			--hl-regexp: #4ec9a0;
+			--hl-symbol: #b888ff;
+			--hl-addition: #4ec9a0;
+			--hl-deletion: #e06070;
 			--hl-text: var(--text-soft);
 		}
 	}
