@@ -8,7 +8,8 @@ A deliberately small stateful agent stack on Cloudflare:
 - Cloudflare Access authenticates requests and D1 stores the user-owned thread control plane.
 - Cloudflare Workers AI runs Kimi K2.6 through AI Gateway, so there is no
   external model API key or Unified Billing balance requirement.
-- The agent has evidence-first profiles, application-owned skills, and one typed runtime-check tool.
+- The agent has evidence-first profiles, application-owned skills, a typed runtime check,
+  Firecrawl web research tools, and Context7 library-documentation retrieval.
 - The UI displays Flue's Durable Streams events while the response runs.
 
 ## Layout
@@ -47,6 +48,8 @@ cp .env.example .env
 | `CF_ACCESS_TEAM_DOMAIN` | Root `.env` and web Worker | Cloudflare Access issuer, such as `https://team.cloudflareaccess.com`. |
 | `CF_ACCESS_AUD`         | Root `.env` and web Worker | Audience tag for the Access application protecting the web Worker.     |
 | `AI_GATEWAY_ID`         | Agent Wrangler config      | AI Gateway ID used by the Cloudflare AI binding.                       |
+| `FIRECRAWL_API_KEY`     | Agent `.dev.vars`/secret   | Authenticates `search_web` and `get_web_content`.                      |
+| `CONTEXT7_API_KEY`      | Agent `.dev.vars`/secret   | Authenticates `get_library_docs`.                                      |
 
 For the deployed web Worker, add `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD`
 under **Workers & Pages > flue-sveltekit-demo > Settings > Variables and
@@ -54,13 +57,23 @@ Secrets**. Do not set `FLUE_AGENT_URL` in production; the Worker uses the
 `FLUE_AGENT` service binding instead.
 
 The agent needs no model API key. Its `AI` binding and dedicated production
-`AI_GATEWAY_ID=flue-sveltekit-demo` are configured in `agent/wrangler.jsonc`. Copy
-`agent/.dev.vars.example` to `agent/.dev.vars` only when you want a local
-gateway override:
+`AI_GATEWAY_ID=flue-sveltekit-demo` are configured in `agent/wrangler.jsonc`.
+Copy `agent/.dev.vars.example` to `agent/.dev.vars` and fill in the two trusted
+research-provider credentials before using the research tools locally:
 
 ```sh
 cp agent/.dev.vars.example agent/.dev.vars
 ```
+
+Set the same credentials as encrypted Worker secrets for production:
+
+```sh
+pnpm --dir agent exec wrangler secret put FIRECRAWL_API_KEY
+pnpm --dir agent exec wrangler secret put CONTEXT7_API_KEY
+```
+
+The keys are read only by trusted Worker tool code. They are not model
+arguments and are never copied into the virtual workspace or shell environment.
 
 `THREADS_DB`, `FLUE_AGENT`, `AI_SUBMISSION_RATE_LIMITER`, and `AI` are Wrangler
 bindings, not environment variables. They are already declared in the two
