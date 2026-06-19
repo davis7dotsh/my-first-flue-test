@@ -242,6 +242,23 @@
 		);
 	}
 
+	function eventErrorDetail(error: unknown, fallback: string) {
+		if (error instanceof Error) {
+			return error.message;
+		}
+		if (typeof error === 'string' && error.trim()) {
+			return error;
+		}
+		if (error && typeof error === 'object' && 'message' in error) {
+			const message = error.message;
+			if (typeof message === 'string' && message.trim()) {
+				return message;
+			}
+		}
+
+		return fallback;
+	}
+
 	function addTrace(type: string, detail: string, tone: TraceItem['tone'] = 'neutral') {
 		trace = [
 			...trace.slice(-49),
@@ -265,23 +282,6 @@
 			return submitted;
 		}
 		return lastPrompt;
-	}
-
-	function eventErrorDetail(error: unknown, fallback: string) {
-		if (error instanceof Error) {
-			return error.message;
-		}
-		if (typeof error === 'string' && error.trim()) {
-			return error;
-		}
-		if (error && typeof error === 'object' && 'message' in error) {
-			const message = error.message;
-			if (typeof message === 'string' && message.trim()) {
-				return message;
-			}
-		}
-
-		return fallback;
 	}
 
 	function captureMessageList(element: HTMLDivElement) {
@@ -462,6 +462,8 @@
 			case 'agent_start':
 				busy = true;
 				hydrating = false;
+				errorMessage = '';
+				failedPrompt = '';
 				addTrace('agent_start', 'The agent began processing.', 'active');
 				break;
 			case 'turn_start':
@@ -522,17 +524,33 @@
 				break;
 			}
 			case 'turn':
-				if (event.isError) {
-					errorMessage = eventErrorDetail(event.error, 'The model turn failed.');
-					failedPrompt = event.submissionId
-						? (submissionPrompts.get(event.submissionId) ?? mostRecentPrompt())
-						: mostRecentPrompt();
-				}
 				addTrace(
 					'turn',
 					event.isError
-						? 'The model turn ended with an error.'
+						? 'A model attempt failed; the submission may retry.'
 						: `The model turn completed with ${event.stopReason ?? 'a terminal response'}.`,
+					event.isError ? 'error' : 'success'
+				);
+				break;
+			case 'operation':
+				if (event.operationKind !== 'prompt') {
+					break;
+				}
+
+				busy = false;
+				hydrating = false;
+				if (event.isError) {
+					errorMessage = eventErrorDetail(event.error, 'The submission failed.');
+					failedPrompt =
+						(event.submissionId ? submissionPrompts.get(event.submissionId) : undefined) ??
+						mostRecentPrompt();
+				} else {
+					errorMessage = '';
+					failedPrompt = '';
+				}
+				addTrace(
+					'operation',
+					event.isError ? errorMessage : 'The submission completed.',
 					event.isError ? 'error' : 'success'
 				);
 				break;
@@ -540,7 +558,7 @@
 				busy = false;
 				hydrating = false;
 				if (event.outcome === 'failed') {
-					errorMessage = event.error ?? 'The submission failed.';
+					errorMessage = eventErrorDetail(event.error, 'The submission failed.');
 					failedPrompt = submissionPrompts.get(event.submissionId) ?? mostRecentPrompt();
 				} else {
 					errorMessage = '';
@@ -548,9 +566,7 @@
 				}
 				addTrace(
 					'submission_settled',
-					event.outcome === 'completed'
-						? 'The submission settled.'
-						: (event.error ?? 'The submission failed.'),
+					event.outcome === 'completed' ? 'The submission settled.' : errorMessage,
 					event.outcome === 'completed' ? 'success' : 'error'
 				);
 				break;
