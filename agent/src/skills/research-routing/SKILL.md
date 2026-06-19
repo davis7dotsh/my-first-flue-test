@@ -18,6 +18,10 @@ Use sources in this order when the corresponding capability is actually attached
 6. Git history, private repositories, package installation, native commands,
    builds, or tests: Cloudflare Sandbox.
 
+This agent currently has Context7 (`get_library_docs`) and Firecrawl
+(`search_web`, `get_web_content`) attached. Search broadly first, then retrieve
+content only from selected URLs so the evidence trail stays compact.
+
 The default virtual sandbox is empty and is not the host filesystem. Do not scan
 `/` for a local checkout. It can use public `curl` GET requests and `tar` to
 stage source archives below `/workspace`, but it cannot perform a real Git clone.

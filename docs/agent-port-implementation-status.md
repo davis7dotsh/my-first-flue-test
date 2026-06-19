@@ -13,6 +13,8 @@
 - Private agent deployment configuration with `workers.dev` and preview URLs disabled.
 - Self-contained researcher, code investigator, browser inspector, and reviewer profiles.
 - Application-owned routing, citation, code-investigation, and long-task skills.
+- Typed Firecrawl search/content and Context7 documentation tools with bounded
+  provider reads, sanitized errors, and Worker-secret isolation.
 - Content-free structured Flue lifecycle telemetry.
 - Worker-runtime tests for Access validation, D1 ownership, legacy-row isolation,
   tombstones, conditional admission, proxy body limits, credential stripping,
@@ -39,7 +41,6 @@ before product behavior is added:
 The following require account resources, credentials, tenancy rules, deletion
 behavior, or confirmed dependency compatibility:
 
-- Context7 and Firecrawl tools;
 - AI Search;
 - Browser Run;
 - Cloudflare Sandbox;

@@ -1,9 +1,11 @@
 import { createAgent, defineTool, type AgentRouteHandler } from '@flue/runtime';
 import * as v from 'valibot';
 import { browserInspectorProfile } from '../profiles/browser-inspector';
-import { codeInvestigatorProfile } from '../profiles/code-investigator';
+import { createCodeInvestigatorProfile } from '../profiles/code-investigator';
 import { researcherProfile } from '../profiles/researcher';
 import { reviewerProfile } from '../profiles/reviewer';
+import { createContext7Tool } from '../tools/context7';
+import { createFirecrawlTools } from '../tools/firecrawl';
 
 export const route: AgentRouteHandler = async (_context, next) => next();
 
@@ -29,12 +31,23 @@ const runtimeCheck = defineTool({
 		})
 });
 
-export default createAgent(() => ({
-	profile: researcherProfile,
-	tools: [runtimeCheck],
-	subagents: [codeInvestigatorProfile, browserInspectorProfile, reviewerProfile],
-	durability: {
-		maxAttempts: 5,
-		timeoutMs: 300_000
-	}
-}));
+export default createAgent<unknown, Cloudflare.Env>((context) => {
+	const getLibraryDocs = createContext7Tool({ apiKey: context.env.CONTEXT7_API_KEY });
+	const { searchWeb, getWebContent } = createFirecrawlTools({
+		apiKey: context.env.FIRECRAWL_API_KEY
+	});
+
+	return {
+		profile: researcherProfile,
+		tools: [runtimeCheck, searchWeb, getWebContent, getLibraryDocs],
+		subagents: [
+			createCodeInvestigatorProfile(getLibraryDocs),
+			browserInspectorProfile,
+			reviewerProfile
+		],
+		durability: {
+			maxAttempts: 5,
+			timeoutMs: 300_000
+		}
+	};
+});

@@ -6,7 +6,7 @@
 	"scripts": {
 		"dev": "flue dev --target cloudflare",
 		"build": "flue build --target cloudflare",
-		"check": "tsc --noEmit",
+		"check": "wrangler types --config wrangler.jsonc --env-file /dev/null && tsc --noEmit",
 		"deploy": "pnpm build && wrangler deploy --config dist/flue_sveltekit_agent/wrangler.json"
 	},
 	"type": "module",
@@ -16,7 +16,6 @@
 		"valibot": "^1.4.1"
 	},
 	"devDependencies": {
-		"@cloudflare/workers-types": "^4.20260615.1",
 		"@flue/cli": "1.0.0-beta.1",
 		"typescript": "^6.0.3",
 		"wrangler": "^4.100.0"
